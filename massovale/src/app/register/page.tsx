@@ -5,11 +5,11 @@ import Image from 'next/image';
 export default function SignInPage() {
   return (
     <main className="flex min-h-screen w-full">
-      <div className="flex flex-1 flex-col justify-center bg-white p-8 sm:p-12 md:p-16 lg:w-1/2">
+      <div className="flex flex-1 flex-col justify-center bg-[#dcdcdc] p-8 sm:p-12 md:p-16 lg:w-1/2">
         <div className="mx-auto w-full max-w-md">
           <div className="mb-8">
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-[#44CFB6] sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight text-black sm:text-4xl">
             Registre-se
           </h1>
           <br/>
@@ -42,15 +42,13 @@ export default function SignInPage() {
         <label htmlFor="floating_phone" className="peer-focus:font-medium absolute text-sm text-gray-500 dark:text-gray-400 duration-300 transform -translate-y-6 scale-75 top-3 -z-10 origin-[0] peer-focus:start-0 rtl:peer-focus:translate-x-1/4 peer-focus:text-blue-600 peer-focus:dark:text-black peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-6">Contato</label>
     </div>
   </div>
-  <button type="submit" className="bg-teal-400 text-white font-bold py-2 px-6 rounded-full hover:bg-teal-500 transition-colors duration-300 shadow-lg">Registrar</button>
+  <button type="submit" className="bg-gray-900 text-white font-bold py-2 px-6 rounded-full hover:bg-white hover:text-black transition-colors duration-300 shadow-lg">Registrar</button>
 </form>
 
-
-          {/* Divisor e Botões Sociais */}
           <div className="mt-10">
             <div className="relative">
               <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                <div className="w-full border-t border-gray-200" />
+                <div className="w-full border-t border-gray-900" />
               </div>
               <div className="relative flex justify-center text-sm font-medium leading-6">
               </div>
@@ -61,7 +59,7 @@ export default function SignInPage() {
 
       <div className="relative hidden flex-1 lg:block">
         <Image
-          src="/LOGOG-2.PNG"
+          src="/logomasso.png"
           alt="Workspace com um laptop e teclado"
           fill
           style={{ objectFit: 'cover' }}
