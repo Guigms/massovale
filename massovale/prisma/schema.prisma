@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       Int           @id @default(autoincrement())
+  name                     String
+  email                    String        @unique
+  password                 String
+  contact                  String
+  role                     Role          @default(PACIENTE)
+  emailVerified            Boolean       @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+
+  appointments             Appointment[]       @relation("UserAppointments")
+  availabilities           Availability[]      @relation("UserAvailabilities")
+}
+
+model Availability {
+  id           Int           @id @default(autoincrement())
+  date         DateTime
+  userId       Int
+  user         User          @relation("UserAvailabilities", fields: [userId], references: [id])
+  appointment  Appointment?  // nullable → se tiver, está ocupado
+
+  @@unique([date, userId]) // Garante que um clínico não tenha dois horários iguais
+}
+
+model Appointment {
+  id             Int           @id @default(autoincrement())
+  userId         Int           // Paciente
+  availabilityId Int           @unique // Um horário só pode ser agendado uma vez
+
+  user           User          @relation("UserAppointments", fields: [userId], references: [id])
+  availability   Availability  @relation(fields: [availabilityId], references: [id])
+}
+
+enum Role {
+  PACIENTE
+  CLINICO
+}
