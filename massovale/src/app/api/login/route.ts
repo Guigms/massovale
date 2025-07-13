@@ -2,9 +2,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -25,7 +27,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Senha incorreta.' }, { status: 401 });
   }
 
-  return NextResponse.json({
+  const token = jwt.sign(
+    { userId: user.id, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '1d' }
+  );
+
+  const response = NextResponse.json({
     message: 'Login realizado com sucesso.',
     user: {
       id: user.id,
@@ -33,4 +41,14 @@ export async function POST(req: NextRequest) {
       role: user.role,
     },
   });
+
+  response.cookies.set('token', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24,
+  });
+
+  return response;
 }

@@ -90,7 +90,7 @@ export default function Home() {
           <div className="container mx-auto px-6 grid md:grid-cols-2 gap-12 items-center">
             <div className="flex justify-center">
               <Image
-                src="/profile2.jpeg"
+                src="/profile.jpeg"
                 alt="Foto da massoterapeuta Jessica Vale"
                 width={350}
                 height={350}
