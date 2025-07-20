@@ -1,51 +1,46 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks } from 'date-fns';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, isToday, compareAsc } from 'date-fns';
+import { ptBR } from 'date-fns/locale/pt-BR';
+import { useRouter } from 'next/navigation';
 
-type AppointmentWithDetails = {
-  id: number;
-  availability: {
-    date: string;
-  };
-  user: {
-    name: string;
-  };
+// --- TIPOS ---
+type SlotStatus = 'booked' | 'blocked' | 'available';
+type SlotDetails = {
+  status: SlotStatus;
+  appointmentId?: number;
+  patient?: { name: string; };
 };
-
-type Availability = {
-  id: number;
-  date: string;
-};
-
-type Patient = {
-  id: number;
-  name: string;
-};
+type Schedule = { [isoDate: string]: SlotDetails; };
+type Patient = { id: number; name: string; };
 
 export default function ClinicoDashboard() {
-  // Estados gerais
-  const [appointments, setAppointments] = useState<AppointmentWithDetails[]>([]);
-  const [availabilities, setAvailabilities] = useState<Availability[]>([]);
-  const [userName, setUserName] = useState('Carla'); // Vai vir da API
+  const router = useRouter(); 
+  const [schedule, setSchedule] = useState<Schedule>({});
+  const [userName, setUserName] = useState('');
   const [userId, setUserId] = useState<number | null>(null);
-
   const [isLoading, setIsLoading] = useState(true);
-
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-
   const [currentWeek, setCurrentWeek] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
-
-  // --- Estado para busca dinâmica de pacientes ---
   const [patientQuery, setPatientQuery] = useState('');
   const [patientResults, setPatientResults] = useState<Patient[]>([]);
-  const [patientLoading, setPatientLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const patientDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const patientDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [, setPatientLoading] = useState(false);
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      router.push('/login');
+    }
+  };
 
-  // Busca paciente dinâmica com debounce
   useEffect(() => {
     if (patientQuery.length < 3) {
       setPatientResults([]);
@@ -53,10 +48,8 @@ export default function ClinicoDashboard() {
       setSelectedPatient(null);
       return;
     }
-
     setPatientLoading(true);
     if (patientDebounceTimeout.current) clearTimeout(patientDebounceTimeout.current);
-
     patientDebounceTimeout.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/patient?search=${encodeURIComponent(patientQuery)}`);
@@ -64,49 +57,29 @@ export default function ClinicoDashboard() {
           const data = await res.json();
           setPatientResults(data);
           setShowPatientDropdown(true);
-        } else {
-          setPatientResults([]);
-          setShowPatientDropdown(false);
-        }
+        } else { setPatientResults([]); }
       } catch (error) {
         console.error('Erro na busca de pacientes:', error);
         setPatientResults([]);
-        setShowPatientDropdown(false);
-      } finally {
-        setPatientLoading(false);
-      }
+      } finally { setPatientLoading(false); }
     }, 400);
-
-    return () => {
-      if (patientDebounceTimeout.current) clearTimeout(patientDebounceTimeout.current);
-    };
+    return () => { if (patientDebounceTimeout.current) clearTimeout(patientDebounceTimeout.current); };
   }, [patientQuery]);
 
-  // Função para recarregar agendamentos e disponibilidades
   const refetchData = useCallback(async () => {
     if (!userId) return;
-
     setIsLoading(true);
     try {
       const weekStartDate = format(currentWeek, 'yyyy-MM-dd');
-      const appointmentUrl = `/api/clinico/appointment?weekStartDate=${weekStartDate}&userId=${userId}`;
-      const availabilityUrl = `/api/clinico/availability?weekStartDate=${weekStartDate}&userId=${userId}`;
-
-      const [appointmentRes, availabilityRes] = await Promise.all([
-        fetch(appointmentUrl),
-        fetch(availabilityUrl),
-      ]);
-
-      if (appointmentRes.ok) setAppointments(await appointmentRes.json());
-      if (availabilityRes.ok) setAvailabilities(await availabilityRes.json());
+      const scheduleUrl = `/api/clinico/schedule?weekStartDate=${weekStartDate}&userId=${userId}`;
+      const res = await fetch(scheduleUrl);
+      setSchedule(res.ok ? await res.json() : {});
     } catch (error) {
       console.error("Erro ao buscar dados da agenda:", error);
-    } finally {
-      setIsLoading(false);
-    }
+      setSchedule({});
+    } finally { setIsLoading(false); }
   }, [userId, currentWeek]);
 
-  // Busca inicial do usuário
   useEffect(() => {
     async function fetchInitialData() {
       try {
@@ -115,151 +88,132 @@ export default function ClinicoDashboard() {
           const userData = await userRes.json();
           setUserId(userData.user.id);
           setUserName(userData.user.name);
-        } else {
-          console.error('Usuário não autenticado.');
-        }
+        } else { router.push('/login'); }
       } catch (error) {
         console.error("Erro ao buscar dados iniciais:", error);
+        router.push('/login');
       }
     }
     fetchInitialData();
-  }, []);
+  }, [router]);
 
-  // Recarrega agenda quando userId ou currentWeek mudam
-  useEffect(() => {
-    refetchData();
-  }, [refetchData]);
+  useEffect(() => { if (userId) { refetchData(); } }, [userId, refetchData]);
 
-  // Handlers do modal
   const handleAgendar = async () => {
-    if (!selectedDate || !selectedPatient) {
-      alert('Selecione uma data e um paciente válidos');
+    if (!selectedDate || !selectedPatient || !userId) {
+      alert('Por favor, selecione um paciente para agendar.');
       return;
     }
-
     try {
-      const res = await fetch('/api/clinico/appointment', {
+      const res = await fetch('/api/appointment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          date: selectedDate,
-          userId: selectedPatient.id,
+          date: selectedDate.toISOString(),
+          patientId: selectedPatient.id,
           clinicoId: userId,
         }),
       });
-
-      if (res.ok) {
-        alert('Agendado com sucesso!');
-        setModalOpen(false);
-        setSelectedPatient(null);
-        setPatientQuery('');
-        setShowPatientDropdown(false);
-        await refetchData();
-      } else {
-        const data = await res.json();
-        alert(data.message || 'Erro ao agendar.');
-      }
+      const data = await res.json();
+      if (!res.ok) { throw new Error(data.message || 'Erro ao agendar consulta.'); }
+      alert('Agendamento realizado com sucesso!');
+      setModalOpen(false);
+      setPatientQuery('');
+      await refetchData();
     } catch (error) {
-      alert('Erro ao tentar agendar.');
-      console.error(error);
+      if (error instanceof Error) {
+        console.error(error);
+        alert(error.message);
+      } else { alert('Ocorreu um erro inesperado.'); }
     }
   };
 
-  const handleBloquear = async () => {
-    if (!selectedDate) return;
+  const handleSetSlotStatus = async (status: 'blocked' | 'available') => {
+    if (!selectedDate || !userId) return;
     try {
-      const res = await fetch('/api/clinico/availability', {
+      const res = await fetch('/api/clinico/blocked-slots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, userId }),
+        body: JSON.stringify({
+          date: selectedDate.toISOString(),
+          clinicoId: userId,
+          status,
+        }),
       });
       const data = await res.json();
-      alert(data.message || 'Horário bloqueado!');
-      setModalOpen(false);
-      await refetchData();
-    } catch (error) {
-      alert('Erro ao bloquear horário.');
-      console.error(error);
-    }
+      if (res.ok) {
+        alert(`Horário ${status === 'blocked' ? 'bloqueado' : 'disponibilizado'} com sucesso!`);
+        setModalOpen(false);
+        await refetchData();
+      } else { alert(data.message || 'Erro ao atualizar horário.'); }
+    } catch { alert('Erro ao atualizar horário.'); }
   };
 
-  const handleDisponibilizar = async () => {
-    if (!selectedDate) return;
+  const handleCancelarAgendamento = async (e: React.MouseEvent, appointmentId: number) => {
+    e.stopPropagation();
+    if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
     try {
-      const res = await fetch('/api/clinico/availability', {
-        method: 'DELETE',
-        headers: { 'Content-type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate, userId }),
-      });
+      const res = await fetch(`/api/appointment?appointmentId=${appointmentId}`, { method: 'DELETE' });
       const data = await res.json();
-      alert(data.message || 'Horário disponibilizado!');
-      setModalOpen(false);
-      await refetchData();
-    } catch (error) {
-      alert('Erro ao disponibilizar horário.');
-      console.error(error);
-    }
+      if (res.ok) {
+        alert('Agendamento cancelado com sucesso.');
+        await refetchData();
+      } else { alert(data.message || 'Erro ao cancelar agendamento.'); }
+    } catch { alert('Erro ao cancelar agendamento.'); }
   };
 
-  // Renderização do calendário
   const startHour = 8;
   const endHour = 18;
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(currentWeek, i));
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
   return (
-    <main className="bg-gray-100 min-h-screen p-6 font-sans">
+    // ✅ CORREÇÃO APLICADA AQUI: bg-gray-100 foi trocado por bg-[#d1d1d1]
+    <main className="bg-[#d1d1d1] min-h-screen p-6 font-sans">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-extrabold text-gray-800">Meu Dashboard</h1>
+        
+        <Image 
+          src="/logover2.png"
+          alt="Logo da Clínica"
+          width={110}
+          height={50}
+          priority
+        />
+
         <div className="flex items-center gap-4">
           <span className="text-lg font-medium text-gray-700">Bem-vinda, Dr(a). {userName}!</span>
-          <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="avatar" className="w-12 h-12 rounded-full shadow" />
+          <img src="/profile.jpeg" alt="avatar" className="w-12 h-12 rounded-full shadow" />
+           <button 
+            onClick={handleLogout}
+            className="text-sm font-semibold text-red-600 hover:text-red-800 transition-colors"
+            title="Sair do sistema"
+          >
+            Sair
+          </button>
         </div>
       </div>
 
-      {isLoading && (
-        <div className="text-center p-10 text-gray-500">
-          <p>Carregando agenda...</p>
-        </div>
-      )}
-
-      {!isLoading && (
+      {isLoading ? (
+        <div className="text-center p-10 text-gray-500"><p>Carregando agenda...</p></div>
+      ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {/* Cards resumo podem ficar aqui */}
-          </div>
-
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
             <section className="col-span-1 xl:col-span-3 bg-white p-6 rounded-2xl shadow">
               <div className="flex justify-between items-center mb-4">
-                <button
-                  onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}
-                  className="text-sm text-blue-600 font-medium hover:underline"
-                >
-                  ← Semana Anterior
-                </button>
-                <h2 className="text-xl font-semibold text-gray-700">
-                  Semana de {format(currentWeek, 'dd/MM/yyyy')}
-                </h2>
-                <button
-                  onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-                  className="text-sm text-blue-600 font-medium hover:underline"
-                >
-                  Próxima Semana →
-                </button>
+                <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">← Semana Anterior</button>
+                <h2 className="text-xl font-semibold text-gray-700">Semana de {format(currentWeek, 'dd/MM/yyyy')}</h2>
+                <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">Próxima Semana →</button>
               </div>
 
               <div className="overflow-x-auto rounded-xl">
                 <table className="min-w-full border border-gray-200 rounded-xl overflow-hidden">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="p-3 border text-left text-sm font-semibold text-gray-600"></th>
-                      {weekDays.map((d) => (
-                        <th
-                          key={d.toDateString()}
-                          className="p-3 border text-center text-sm font-semibold text-gray-600"
-                        >
-                          {format(d, 'EEE, dd/MM')}
+                      <th className="border px-3 py-2 text-sm text-gray-500 text-left">Hora</th>
+                      {weekDays.map((day) => (
+                        <th key={day.toISOString()} className={`border px-3 py-2 text-sm text-center transition-colors ${isToday(day) ? 'bg-blue-100' : ''}`}>
+                          <div className={`font-semibold ${isToday(day) ? 'text-blue-700' : 'text-gray-700'}`}>{format(day, 'EEEE', {locale: ptBR})}</div>
+                          <div className={` ${isToday(day) ? 'text-blue-500' : 'text-gray-500'}`}>{format(day, 'dd/MM')}</div>
                         </th>
                       ))}
                     </tr>
@@ -267,47 +221,53 @@ export default function ClinicoDashboard() {
                   <tbody>
                     {hours.map((hour) => (
                       <tr key={hour} className="bg-white hover:bg-gray-50 transition">
-                        <td className="border px-3 py-2 font-semibold text-sm text-gray-700">{`${hour
-                          .toString()
-                          .padStart(2, '0')}:00`}</td>
-                        {weekDays.map((d) => {
-                          const slot = new Date(d);
-                          slot.setHours(hour, 0, 0, 0);
-                          const foundAppointment = appointments.find(
-                            (a) => new Date(a.availability.date).getTime() === slot.getTime()
-                          );
-                          const foundAvailability = availabilities.find(
-                            (a) => new Date(a.date).getTime() === slot.getTime()
-                          );
-                          const isBooked = !!foundAppointment;
-                          const isBlocked = foundAvailability && !isBooked;
+                        <td className="border px-3 py-2 font-semibold text-sm text-gray-700">{`${hour.toString().padStart(2, '0')}:00`}</td>
+                        {weekDays.map((day) => {
+                          const slotDate = new Date(day);
+                          slotDate.setHours(hour, 0, 0, 0);
+                          const slotDetails = schedule[slotDate.toISOString()];
+
+                          let content;
+                          if (slotDetails?.status === 'booked') {
+                            content = (
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="bg-blue-100 text-blue-800 text-sm rounded-xl px-2 py-1 font-medium">
+                                  {slotDetails.patient?.name}
+                                </div>
+                                <button
+                                  onClick={(e) => handleCancelarAgendamento(e, slotDetails.appointmentId!)}
+                                  className="text-xs text-red-600 hover:underline"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            );
+                          } else if (slotDetails?.status === 'blocked') {
+                            content = (
+                              <div className="bg-red-100 text-red-800 text-sm rounded-xl px-2 py-1 font-medium">
+                                Bloqueado
+                              </div>
+                            );
+                          } else {
+                            content = (
+                              <div className="bg-green-100 text-green-800 text-sm rounded-xl px-2 py-1 font-medium">
+                                Disponível
+                              </div>
+                            );
+                          }
 
                           return (
                             <td
-                              key={d.toISOString() + hour}
-                              className="border text-center px-2 py-2 cursor-pointer hover:bg-blue-50 transition-all"
+                              key={slotDate.toISOString()}
+                              className={`border text-center px-2 py-2 cursor-pointer hover:bg-blue-50 transition-all ${isToday(day) ? 'bg-blue-50' : ''}`}
                               onClick={() => {
-                                setSelectedDate(slot);
+                                setSelectedDate(slotDate);
                                 setModalOpen(true);
-                                // Reset seleção paciente ao abrir modal
-                                setSelectedPatient(null);
                                 setPatientQuery('');
-                                setShowPatientDropdown(false);
+                                setSelectedPatient(null);
                               }}
                             >
-                              {isBooked ? (
-                                <div className="bg-blue-100 text-blue-800 text-sm rounded-xl px-2 py-1 font-medium">
-                                  {foundAppointment.user.name}
-                                </div>
-                              ) : isBlocked ? (
-                                <div className="bg-red-100 text-red-800 text-sm rounded-xl px-2 py-1 font-medium">
-                                  Bloqueado
-                                </div>
-                              ) : (
-                                <div className="bg-green-100 text-green-800 text-sm rounded-xl px-2 py-1 font-medium">
-                                  Disponível
-                                </div>
-                              )}
+                              {content}
                             </td>
                           );
                         })}
@@ -317,21 +277,38 @@ export default function ClinicoDashboard() {
                 </table>
               </div>
             </section>
-
+            
             <section className="bg-white p-6 rounded-2xl shadow h-fit xl:col-span-1">
               <h2 className="text-2xl font-semibold mb-4 text-gray-700">Próximos Pacientes (Hoje)</h2>
-              <ul className="space-y-3">
-                {appointments.map((a) => (
-                  <li key={a.id} className="flex items-center gap-3">
-                    <span className="font-bold text-blue-600 text-sm w-14">
-                      {format(new Date(a.availability.date), 'HH:mm')}
-                    </span>
-                    <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-xl text-sm font-medium">
-                      {a.user.name}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              {(() => {
+                const todayAppointments = Object.entries(schedule)
+                  .filter(([isoDate, details]) =>
+                    details.status === 'booked' && isSameDay(new Date(isoDate), new Date())
+                  )
+                  .map(([isoDate, details]) => ({
+                    id: details.appointmentId!,
+                    date: isoDate,
+                    patientName: details.patient!.name,
+                  }))
+                  .sort((a, b) => compareAsc(new Date(a.date), new Date(b.date)));
+
+                return (
+                  <ul className="space-y-3">
+                    {todayAppointments.length > 0 ? (
+                      todayAppointments.map((a) => (
+                        <li key={a.id} className="flex items-center gap-3">
+                          <span className="font-bold text-blue-600 text-sm w-14">{format(new Date(a.date), 'HH:mm')}</span>
+                          <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-xl text-sm font-medium">
+                            {a.patientName}
+                          </div>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-sm text-gray-500">Nenhum paciente agendado para hoje.</li>
+                    )}
+                  </ul>
+                );
+              })()}
             </section>
           </div>
         </>
@@ -344,7 +321,6 @@ export default function ClinicoDashboard() {
               Selecionado: {format(selectedDate, 'dd/MM/yyyy HH:mm')}
             </h2>
             <div className="space-y-4">
-              {/* Input busca dinâmica */}
               <div className="relative">
                 <input
                   type="text"
@@ -352,69 +328,55 @@ export default function ClinicoDashboard() {
                   value={patientQuery}
                   onChange={(e) => {
                     setPatientQuery(e.target.value);
-                    setSelectedPatient(null); // Limpa seleção se digitar algo novo
+                    setSelectedPatient(null);
                   }}
                   className="text-black border p-2 rounded w-full"
-                  onFocus={() => {
-                    if (patientResults.length > 0) setShowPatientDropdown(true);
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowPatientDropdown(false), 150);
-                  }}
+                  onFocus={() => { if (patientResults.length > 0) setShowPatientDropdown(true); }}
+                  onBlur={() => { setTimeout(() => setShowPatientDropdown(false), 150); }}
                 />
-                {patientLoading && (
-                  <div className="absolute top-full left-0 bg-white w-full p-2 text-sm text-black">
-                    Buscando...
-                  </div>
-                )}
                 {showPatientDropdown && patientResults.length > 0 && (
-                  <ul className="absolute top-full left-0 bg-white border rounded w-full max-h-48 overflow-auto z-10">
+                  <ul className="absolute z-10 bg-white text-black border rounded w-full mt-1 max-h-40 overflow-y-auto shadow">
                     {patientResults.map((patient) => (
                       <li
                         key={patient.id}
-                        className="p-2 hover:bg-white text-black cursor-pointer"
                         onClick={() => {
                           setSelectedPatient(patient);
                           setPatientQuery(patient.name);
                           setShowPatientDropdown(false);
                         }}
+                        className="px-4 py-2 text-sm hover:bg-blue-100 cursor-pointer"
                       >
                         {patient.name}
                       </li>
                     ))}
                   </ul>
                 )}
-                {!patientLoading && patientQuery.length >= 3 && patientResults.length === 0 && (
-                  <div className="absolute top-full left-0 bg-white w-full p-2 text-sm text-black">
-                    Nenhum paciente encontrado.
-                  </div>
-                )}
               </div>
 
               <button
                 onClick={handleAgendar}
                 disabled={!selectedPatient}
-                className={`w-full py-2 rounded text-white ${
-                  selectedPatient ? 'bg-green-400 hover:bg-green-600' : 'bg-green-200 cursor-not-allowed'
+                className={`w-full py-2 rounded text-white transition-colors ${
+                  selectedPatient ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'
                 }`}
               >
-                Agendar em nome de paciente
+                Agendar para {selectedPatient?.name || '...'}
               </button>
               <button
-                onClick={handleBloquear}
+                onClick={() => handleSetSlotStatus('blocked')}
                 className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700"
               >
                 Bloquear horário
               </button>
               <button
-                onClick={handleDisponibilizar}
+                onClick={() => handleSetSlotStatus('available')}
                 className="w-full bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600"
               >
                 Disponibilizar horário
               </button>
               <button
                 onClick={() => setModalOpen(false)}
-                className="w-full text-gray-500 hover:text-gray-700 text-sm"
+                className="w-full text-gray-500 hover:text-gray-700 text-sm pt-2"
               >
                 Cancelar
               </button>

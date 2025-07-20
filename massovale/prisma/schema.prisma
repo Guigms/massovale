@@ -8,37 +8,40 @@ datasource db {
 }
 
 model User {
-  id                       Int           @id @default(autoincrement())
+  id                       Int      @id @default(autoincrement())
   name                     String
-  email                    String        @unique
+  email                    String   @unique
   password                 String
   contact                  String
-  role                     Role          @default(PACIENTE)
-  emailVerified            Boolean       @default(false)
+  role                     Role     @default(PACIENTE)
+  emailVerified            Boolean  @default(false)
   emailVerificationToken   String?
   emailVerificationExpires DateTime?
 
-  appointments             Appointment[]       @relation("UserAppointments")
-  availabilities           Availability[]      @relation("UserAvailabilities")
+  // Relacionamentos
+  appointmentsAsPaciente Appointment[] @relation("PatientAppointments")
+  appointmentsAsClinico  Appointment[] @relation("ClinicoAppointments")
+  blockedSlots           BlockedSlot[] // Relação correta para horários bloqueados
 }
 
-model Availability {
-  id           Int           @id @default(autoincrement())
-  date         DateTime
-  userId       Int
-  user         User          @relation("UserAvailabilities", fields: [userId], references: [id])
-  appointment  Appointment?  // nullable → se tiver, está ocupado
+model BlockedSlot {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  clinico   User     @relation(fields: [clinicoId], references: [id])
+  clinicoId Int
 
-  @@unique([date, userId]) // Garante que um clínico não tenha dois horários iguais
+  @@unique([clinicoId, date])
 }
 
 model Appointment {
-  id             Int           @id @default(autoincrement())
-  userId         Int           // Paciente
-  availabilityId Int           @unique // Um horário só pode ser agendado uma vez
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  patient   User     @relation("PatientAppointments", fields: [patientId], references: [id])
+  patientId Int
+  clinico   User     @relation("ClinicoAppointments", fields: [clinicoId], references: [id])
+  clinicoId Int
 
-  user           User          @relation("UserAppointments", fields: [userId], references: [id])
-  availability   Availability  @relation(fields: [availabilityId], references: [id])
+  @@unique([clinicoId, date])
 }
 
 enum Role {
