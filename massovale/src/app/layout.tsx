@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import React from "react";
+import { Toaster } from 'sonner';
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -11,7 +12,7 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: "Jessica Vale - Massoterapeuta",
-  description: "Landing page da massoterapeuta Jessica Vale em Pacatuba, Ceará.",
+  description: "Profissional de Massoterapia Esportiva",
 };
 
 // Adicionando a tipagem para a prop 'children'
@@ -22,7 +23,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={poppins.className}>{children}</body>
+      <body className={poppins.className}>
+        <Toaster richColors position="top-right" />
+        {children}
+        </body>
     </html>
   );
 }

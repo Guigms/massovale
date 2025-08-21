@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, isToday, compareAsc } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 // --- TIPOS ---
 type SlotStatus = 'booked' | 'blocked' | 'available';
@@ -101,7 +102,7 @@ export default function ClinicoDashboard() {
 
   const handleAgendar = async () => {
     if (!selectedDate || !selectedPatient || !userId) {
-      alert('Por favor, selecione um paciente para agendar.');
+      toast.warning('Por favor, selecione um paciente para agendar.');
       return;
     }
     try {
@@ -116,15 +117,18 @@ export default function ClinicoDashboard() {
       });
       const data = await res.json();
       if (!res.ok) { throw new Error(data.message || 'Erro ao agendar consulta.'); }
-      alert('Agendamento realizado com sucesso!');
+      
+      toast.success('Agendamento realizado com sucesso!');
       setModalOpen(false);
       setPatientQuery('');
       await refetchData();
     } catch (error) {
       if (error instanceof Error) {
         console.error(error);
-        alert(error.message);
-      } else { alert('Ocorreu um erro inesperado.'); }
+        toast.error(error.message);
+      } else { 
+        toast.error('Ocorreu um erro inesperado.');
+      }
     }
   };
 
@@ -142,11 +146,15 @@ export default function ClinicoDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`Horário ${status === 'blocked' ? 'bloqueado' : 'disponibilizado'} com sucesso!`);
+        toast.success(`Horário ${status === 'blocked' ? 'bloqueado' : 'disponibilizado'} com sucesso!`);
         setModalOpen(false);
         await refetchData();
-      } else { alert(data.message || 'Erro ao atualizar horário.'); }
-    } catch { alert('Erro ao atualizar horário.'); }
+      } else { 
+        toast.error(data.message || 'Erro ao atualizar horário.');
+      }
+    } catch { 
+      toast.error('Erro de conexão ao atualizar horário.');
+    }
   };
 
   const handleCancelarAgendamento = async (e: React.MouseEvent, appointmentId: number) => {
@@ -156,10 +164,14 @@ export default function ClinicoDashboard() {
       const res = await fetch(`/api/appointment?appointmentId=${appointmentId}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
-        alert('Agendamento cancelado com sucesso.');
+        toast.success('Agendamento cancelado com sucesso.');
         await refetchData();
-      } else { alert(data.message || 'Erro ao cancelar agendamento.'); }
-    } catch { alert('Erro ao cancelar agendamento.'); }
+      } else { 
+        toast.error(data.message || 'Erro ao cancelar agendamento.');
+      }
+    } catch { 
+      toast.error('Erro de conexão ao cancelar agendamento.');
+    }
   };
 
   const startHour = 8;
@@ -168,9 +180,8 @@ export default function ClinicoDashboard() {
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
 
   return (
-    // ✅ CORREÇÃO APLICADA AQUI: bg-gray-100 foi trocado por bg-[#d1d1d1]
-    <main className="bg-[#d1d1d1] min-h-screen p-6 font-sans">
-      <div className="flex justify-between items-center mb-8">
+    <main className="bg-[#d1d1d1] min-h-screen p-4 md:p-6 font-sans">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-8">
         
         <Image 
           src="/logover2.png"
@@ -180,9 +191,9 @@ export default function ClinicoDashboard() {
           priority
         />
 
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-medium text-gray-700">Bem-vinda, Dr(a). {userName}!</span>
-          <img src="/profile.jpeg" alt="avatar" className="w-12 h-12 rounded-full shadow" />
+        <div className="flex items-center gap-4 self-end md:self-center">
+          <span className="text-base md:text-lg font-medium text-gray-700 text-right md:text-left">Bem-vinda, Dr(a).<br className="md:hidden" /> {userName}!</span>
+          <img src="/profile.jpeg" alt="avatar" className="w-10 h-10 md:w-12 md:h-12 rounded-full shadow" />
            <button 
             onClick={handleLogout}
             className="text-sm font-semibold text-red-600 hover:text-red-800 transition-colors"
@@ -198,11 +209,11 @@ export default function ClinicoDashboard() {
       ) : (
         <>
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            <section className="col-span-1 xl:col-span-3 bg-white p-6 rounded-2xl shadow">
+            <section className="col-span-1 xl:col-span-3 bg-white p-4 md:p-6 rounded-2xl shadow">
               <div className="flex justify-between items-center mb-4">
-                <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">← Semana Anterior</button>
-                <h2 className="text-xl font-semibold text-gray-700">Semana de {format(currentWeek, 'dd/MM/yyyy')}</h2>
-                <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">Próxima Semana →</button>
+                <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">← Semana</button>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-700 text-center">Semana de {format(currentWeek, 'dd/MM')}</h2>
+                <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">Próxima →</button>
               </div>
 
               <div className="overflow-x-auto rounded-xl">
@@ -231,7 +242,7 @@ export default function ClinicoDashboard() {
                           if (slotDetails?.status === 'booked') {
                             content = (
                               <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="bg-blue-100 text-blue-800 text-sm rounded-xl px-2 py-1 font-medium">
+                                <div className="bg-blue-100 text-blue-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium whitespace-nowrap">
                                   {slotDetails.patient?.name}
                                 </div>
                                 <button
@@ -244,13 +255,13 @@ export default function ClinicoDashboard() {
                             );
                           } else if (slotDetails?.status === 'blocked') {
                             content = (
-                              <div className="bg-red-100 text-red-800 text-sm rounded-xl px-2 py-1 font-medium">
+                              <div className="bg-red-100 text-red-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium">
                                 Bloqueado
                               </div>
                             );
                           } else {
                             content = (
-                              <div className="bg-green-100 text-green-800 text-sm rounded-xl px-2 py-1 font-medium">
+                              <div className="bg-green-100 text-green-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium">
                                 Disponível
                               </div>
                             );
@@ -259,7 +270,7 @@ export default function ClinicoDashboard() {
                           return (
                             <td
                               key={slotDate.toISOString()}
-                              className={`border text-center px-2 py-2 cursor-pointer hover:bg-blue-50 transition-all ${isToday(day) ? 'bg-blue-50' : ''}`}
+                              className={`border text-center px-1 md:px-2 py-2 cursor-pointer hover:bg-blue-50 transition-all ${isToday(day) ? 'bg-blue-50' : ''}`}
                               onClick={() => {
                                 setSelectedDate(slotDate);
                                 setModalOpen(true);
@@ -278,8 +289,8 @@ export default function ClinicoDashboard() {
               </div>
             </section>
             
-            <section className="bg-white p-6 rounded-2xl shadow h-fit xl:col-span-1">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-700">Próximos Pacientes (Hoje)</h2>
+            <section className="bg-white p-4 md:p-6 rounded-2xl shadow h-fit xl:col-span-1">
+              <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-700">Próximos Pacientes (Hoje)</h2>
               {(() => {
                 const todayAppointments = Object.entries(schedule)
                   .filter(([isoDate, details]) =>
@@ -315,7 +326,7 @@ export default function ClinicoDashboard() {
       )}
 
       {modalOpen && selectedDate && (
-        <div className="fixed inset-0 bg-black bg-opacity-20 flex justify-center items-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-20 flex justify-center items-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md">
             <h2 className="text-black text-xl font-semibold mb-4">
               Selecionado: {format(selectedDate, 'dd/MM/yyyy HH:mm')}

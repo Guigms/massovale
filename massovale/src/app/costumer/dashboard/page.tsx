@@ -1,204 +1,217 @@
 'use client';
 
-import {
-  format,
-  addDays,
-  startOfWeek,
-  addWeeks,
-  subWeeks,
-  parseISO,
-} from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, isToday } from 'date-fns';
+import { ptBR } from 'date-fns/locale/pt-BR';
+import { useRouter } from 'next/navigation';
+import useSWR, { mutate } from 'swr';
 
-type SlotStatus = 'booked' | 'blocked' | 'available';
-
-type SlotDetails = {
-  status: SlotStatus;
-  appointmentId?: number;
-  patientName?: string;
-};
-
-type WeekSlots = {
-  [date: string]: {
-    [hour: string]: SlotDetails;
-  };
-};
-
-type Patient = {
+// --- TIPOS ---
+type Clinico = { id: number; name: string; };
+type AvailabilitySlot = { date: string; status: 'free' | 'booked' | 'blocked'; };
+type MyAppointment = {
   id: number;
-  name: string;
+  date: string;
+  clinico: { name: string; };
 };
 
-export default function WeeklyScheduler() {
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [slots, setSlots] = useState<WeekSlots>({});
-  const [selectedSlot, setSelectedSlot] = useState<{ date: string; hour: string } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [patientQuery, setPatientQuery] = useState('');
-  const [patientResults, setPatientResults] = useState<Patient[]>([]);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+// --- Fetcher para o SWR ---
+const fetcher = (url: string) => fetch(url).then(res => {
+  if (!res.ok) {
+    throw new Error('Falha ao buscar os dados.');
+  }
+  return res.json();
+});
 
-  const weekDays = Array.from({ length: 7 }).map((_, i) =>
-    addDays(currentWeekStart, i)
-  );
+export default function PacienteDashboard() {
+  const router = useRouter();
+  
+  // --- Estados do Componente ---
+  const [userName, setUserName] = useState('');
+  const [patientId, setPatientId] = useState<number | null>(null);
+  const [selectedClinico, setSelectedClinico] = useState<Clinico | null>(null);
+  const [currentWeek, setCurrentWeek] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
 
-  const hours = Array.from({ length: 12 }).map((_, i) => `${8 + i}:00`);
+  // --- Gerenciamento de dados com SWR ---
+  const { data: clinicos, error: clinicosError } = useSWR<Clinico[]>('/api/clinicos', fetcher);
+  const { data: myAppointments, error: appointmentsError } = useSWR<MyAppointment[]>('/api/patient/myAppointment', fetcher);
+  
+  const availabilityUrl = selectedClinico ? `/api/availability?clinicoId=${selectedClinico.id}&startDate=${format(currentWeek, 'yyyy-MM-dd')}` : null;
+  const { data: availability, isLoading: isLoadingAvailability } = useSWR<AvailabilitySlot[]>(availabilityUrl, fetcher);
 
+  // --- Efeito para buscar os dados do usuário ---
   useEffect(() => {
-    fetch(`/api/schedule?start=${currentWeekStart.toISOString()}`)
-      .then((res) => res.json())
-      .then((data: WeekSlots) => setSlots(data));
-  }, [currentWeekStart]);
-
-  const handleSlotClick = (date: string, hour: string) => {
-    setSelectedSlot({ date, hour });
-    setIsModalOpen(true);
-    setSelectedPatient(null);
-    setPatientQuery('');
-    setPatientResults([]);
-    setShowPatientDropdown(false);
-  };
-
-  const handleBook = async () => {
-    if (!selectedSlot || !selectedPatient) return;
-    await fetch('/api/appointment', {
-      method: 'POST',
-      body: JSON.stringify({
-        date: `${selectedSlot.date}T${selectedSlot.hour}`,
-        userId: selectedPatient.id,
-        clinicoId: 1,
-      }),
-      headers: { 'Content-Type': 'application/json' },
-    });
-    setIsModalOpen(false);
-  };
-
-  useEffect(() => {
-    if (patientQuery.trim().length === 0) {
-      setPatientResults([]);
-      return;
+    async function fetchUser() {
+      try {
+        const userRes = await fetch('/api/userJWT');
+        if (!userRes.ok) { router.push('/login'); return; }
+        const { user } = await userRes.json();
+        setUserName(user.name);
+        setPatientId(user.id);
+      } catch {
+        router.push('/login');
+      }
     }
-    const timeout = setTimeout(async () => {
-      const res = await fetch(`/api/patient?search=${encodeURIComponent(patientQuery)}`);
-      const data = await res.json();
-      setPatientResults(data);
-      setShowPatientDropdown(true);
-    }, 400);
-    return () => clearTimeout(timeout);
-  }, [patientQuery]);
+    fetchUser();
+  }, [router]);
+  
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      router.push('/login');
+    }
+  };
 
+  // --- Funções de Ação ---
+  const handleAgendar = async (slot: AvailabilitySlot) => {
+    if (!patientId || !selectedClinico) return;
+    if (!confirm(`Confirmar agendamento com ${selectedClinico.name} em ${format(new Date(slot.date), 'dd/MM/yyyy \'às\' HH:mm')}?`)) return;
+
+    try {
+      await fetch('/api/appointment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: slot.date, patientId, clinicoId: selectedClinico.id }),
+      });
+      alert('Agendado com sucesso!');
+      mutate('/api/patient/myAppointment');
+      mutate(availabilityUrl);
+    } catch (error) {
+      if(error instanceof Error) alert(error.message);
+    }
+  };
+
+  const handleCancelar = async (appointmentId: number) => {
+    if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
+    try {
+      await fetch(`/api/appointment?appointmentId=${appointmentId}`, { method: 'DELETE' });
+      alert('Agendamento cancelado com sucesso!');
+      mutate('/api/patient/myAppointment');
+    } catch (error) {
+      if(error instanceof Error) alert(error.message);
+    }
+  };
+
+  // --- Constantes de Renderização ---
+  const hours = Array.from({ length: 11 }, (_, i) => 8 + i);
+  const weekDays = Array.from({ length: 5 }, (_, i) => addDays(currentWeek, i));
+
+  // --- Renderização da Tela de Seleção de Clínico ---
+  if (!selectedClinico) {
+    return (
+      <main className="bg-[#d1d1d1] min-h-screen flex flex-col items-center justify-center p-6 font-sans">
+        <div className="text-center">
+            <Image src="/logover2.png" alt="Logo da Clínica" width={140} height={60} priority className="mx-auto" />
+            <h1 className="text-2xl font-bold text-zinc-800 mt-4">Bem-vindo(a), {userName}!</h1>
+            <p className="text-zinc-600 mb-8">Selecione um profissional para ver a agenda.</p>
+        </div>
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-lg w-full max-w-sm space-y-3">
+          {!clinicos && !clinicosError && <p className="text-center text-zinc-500">Carregando profissionais...</p>}
+          {clinicos?.map(clinico => (
+            <button key={clinico.id} onClick={() => setSelectedClinico(clinico)} className="w-full text-left p-4 rounded-lg bg-gray-100 hover:bg-blue-100 transition-colors">
+              <p className="font-bold text-zinc-800">{clinico.name}</p>
+              <p className="text-sm text-zinc-500">Fisioterapeuta</p>
+            </button>
+          ))}
+        </div>
+        <button onClick={handleLogout} className="text-sm font-semibold text-red-600 hover:text-red-800 mt-8">Sair</button>
+      </main>
+    );
+  }
+
+  // --- Renderização do Dashboard Principal do Paciente ---
   return (
-    <div className="p-4">
-      <div className="flex justify-between mb-4">
-        <button onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>Semana anterior</button>
-        <h2 className="text-lg font-semibold">
-          Semana de {format(currentWeekStart, "dd 'de' MMMM", { locale: ptBR })}
-        </h2>
-        <button onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>Próxima semana</button>
+    <main className="bg-[#d1d1d1] min-h-screen p-4 md:p-6 font-sans">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-8">
+        <Image src="/logover2.png" alt="Logo da Clínica" width={110} height={50} priority />
+        <div className="flex items-center gap-4 self-end md:self-center">
+          <span className="text-base md:text-lg font-medium text-zinc-700 text-right md:text-left">Bem-vindo(a),<br className="md:hidden"/> {userName}!</span>
+          <button onClick={handleLogout} className="text-sm font-semibold text-red-600 hover:text-red-800">Sair</button>
+        </div>
       </div>
 
-      <div className="overflow-x-auto border rounded-lg">
-        <table className="min-w-full table-fixed">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="border px-3 py-2 text-sm text-gray-500 text-left">Hora</th>
-              {weekDays.map((day) => (
-                <th key={day.toISOString()} className="border px-3 py-2 text-sm text-gray-700 text-center">
-                  <div className="font-semibold">{format(day, 'EEEE', { locale: ptBR })}</div>
-                  <div className="text-gray-500 text-sm">{format(day, 'dd/MM')}</div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {hours.map((hour) => (
-              <tr key={hour}>
-                <td className="border px-3 py-2 text-sm text-gray-500">{hour}</td>
-                {weekDays.map((day) => {
-                  const dateKey = format(day, 'yyyy-MM-dd');
-                  const slot = slots[dateKey]?.[hour];
-                  const status = slot?.status ?? 'available';
-
-                  let bgColor = 'bg-white';
-                  if (status === 'booked') bgColor = 'bg-red-200';
-                  else if (status === 'blocked') bgColor = 'bg-gray-300';
-                  else if (status === 'available') bgColor = 'bg-green-100';
-
-                  return (
-                    <td
-                      key={day.toISOString()}
-                      className={`border text-center px-2 py-1 cursor-pointer text-sm ${bgColor}`}
-                      onClick={() => handleSlotClick(dateKey, hour)}
-                    >
-                      {status === 'booked' && slot?.patientName}
-                      {status === 'blocked' && 'Indisponível'}
-                      {status === 'available' && 'Disponível'}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal */}
-      {isModalOpen && selectedSlot && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white p-6 rounded shadow max-w-md w-full relative">
-            <h3 className="text-lg font-semibold mb-2">
-              Agendar para {format(parseISO(`${selectedSlot.date}T${selectedSlot.hour}`), "EEEE, dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-            </h3>
-            <label className="block mb-2">
-              Buscar paciente:
-              <input
-                type="text"
-                value={patientQuery}
-                onChange={(e) => {
-                  setPatientQuery(e.target.value);
-                  setSelectedPatient(null);
-                }}
-                onFocus={() => setShowPatientDropdown(true)}
-                className="w-full border p-2 mt-1 rounded"
-                placeholder="Digite o nome do paciente"
-              />
-              {showPatientDropdown && patientResults.length > 0 && (
-                <ul className="absolute z-10 bg-white border rounded w-full mt-1 max-h-40 overflow-y-auto shadow">
-                  {patientResults.map((patient) => (
-                    <li
-                      key={patient.id}
-                      onClick={() => {
-                        setSelectedPatient(patient);
-                        setPatientQuery(patient.name);
-                        setShowPatientDropdown(false);
-                      }}
-                      className="px-4 py-2 text-sm hover:bg-blue-100 cursor-pointer"
-                    >
-                      {patient.name}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </label>
-            <div className="flex justify-end space-x-2 mt-4">
-              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-gray-300 rounded">
-                Cancelar
-              </button>
-              <button
-                onClick={handleBook}
-                disabled={!selectedPatient}
-                className={`px-4 py-2 rounded ${
-                  selectedPatient ? 'bg-blue-600 text-white' : 'bg-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Confirmar
-              </button>
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        <section className="col-span-1 xl:col-span-3 bg-white p-4 md:p-6 rounded-2xl shadow">
+          <div className="flex flex-col md:flex-row justify-between md:items-center gap-2 mb-4">
+            <button onClick={() => setSelectedClinico(null)} className="text-sm text-blue-600 font-medium hover:underline self-start">← Trocar de Clínico</button>
+            <h2 className="text-lg md:text-xl font-semibold text-gray-700 order-first md:order-none">Agenda de {selectedClinico.name}</h2>
+            <div className="flex items-center gap-2 self-end md:self-center">
+              <button onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">← Anterior</button>
+              <button onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))} className="text-sm text-blue-600 font-medium hover:underline">Próxima →</button>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+          
+          <div className="overflow-x-auto rounded-xl">
+             {isLoadingAvailability ? (<div className="text-center p-10 text-zinc-500">Carregando agenda...</div>) : (
+                <table className="min-w-full border-separate border-spacing-1">
+                <thead>
+                  <tr>
+                    <th className="p-1 md:p-2"></th>
+                    {weekDays.map(day => (
+                      <th key={day.toISOString()} className={`p-2 rounded-lg transition-colors ${isToday(day) ? 'bg-blue-100' : 'bg-gray-50'}`}>
+                        <p className={`font-semibold text-xs md:text-sm ${isToday(day) ? 'text-blue-700' : 'text-gray-700'}`}>{format(day, 'EEE', { locale: ptBR })}</p>
+                        <p className={`font-normal text-xs ${isToday(day) ? 'text-blue-500' : 'text-gray-500'}`}>{format(day, 'dd/MM')}</p>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {hours.map(hour => (
+                    <tr key={hour}>
+                      <td className="p-1 md:p-2 text-center text-xs font-semibold text-gray-500">{`${hour}:00`}</td>
+                      {weekDays.map(day => {
+                        const slotDate = `${format(day, 'yyyy-MM-dd')}T${String(hour).padStart(2, '0')}:00`;
+                        const slot = availability?.find(s => s.date.startsWith(slotDate));
+                        
+                        return (
+                          <td key={day.toISOString() + hour} className="p-1">
+                            {slot ? (
+                              <button
+                                onClick={() => handleAgendar(slot)}
+                                disabled={slot.status !== 'free'}
+                                className={`w-full p-2 rounded-md text-xs font-semibold text-center transition-all ${
+                                  slot.status === 'free' ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-red-100 text-red-700 cursor-not-allowed'
+                                }`}
+                              >
+                                {slot.status === 'free' ? 'Agendar' : 'Ocupado'}
+                              </button>
+                            ) : (
+                              <div className="w-full p-2 rounded-md bg-gray-100 h-9"></div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+             )}
+          </div>
+        </section>
+
+        <aside className="bg-white p-4 md:p-6 rounded-2xl shadow h-fit">
+          <h2 className="text-xl font-semibold mb-4 text-zinc-800">Meus Agendamentos</h2>
+          <div className="space-y-3">
+            {!myAppointments && !appointmentsError && <div className="text-sm text-center text-zinc-500 py-4">Carregando...</div>}
+            {appointmentsError && <div className="text-sm text-center text-red-500 py-4">Falha ao carregar.</div>}
+            {myAppointments && myAppointments.length > 0 ? (
+              myAppointments.map(app => (
+                <div key={app.id} className="p-3 rounded-lg bg-gray-50 border">
+                  <p className="font-bold text-zinc-700">{format(new Date(app.date), "eeee, dd 'de' MMMM", { locale: ptBR })}</p>
+                  <p className="text-zinc-600">às {format(new Date(app.date), 'HH:mm')} com {app.clinico.name}</p>
+                  <button onClick={() => handleCancelar(app.id)} className="text-xs text-red-500 hover:underline mt-2">Cancelar consulta</button>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-zinc-500 text-center py-4">Você não possui agendamentos futuros.</p>
+            )}
+          </div>
+        </aside>
+      </div>
+    </main>
   );
 }
