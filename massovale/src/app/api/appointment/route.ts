@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { sendAppointmentConfirmationEmail, sendAppointmentCancellationEmail } from '@/lib/email';
 
-// POST: Cria um novo agendamento
+// POST: Cria um novo agendamento e envia e-mails de confirmação
 export async function POST(req: NextRequest) {
   const { date, patientId, clinicoId } = await req.json();
 
@@ -19,10 +20,23 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Após criar, busca os dados completos para enviar no e-mail
+    const appointmentDetails = await prisma.appointment.findUnique({
+      where: { id: appointment.id },
+      include: {
+        patient: true,
+        clinico: true,
+      },
+    });
+
+    // Envia os e-mails de confirmação (sem bloquear a resposta da API)
+    if (appointmentDetails) {
+      sendAppointmentConfirmationEmail(appointmentDetails).catch(console.error);
+    }
+
     return NextResponse.json(appointment, { status: 201 });
 
   } catch (error: unknown) {
-    // Trata o erro caso o horário já tenha sido agendado (por causa do @@unique)
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json({ message: 'Este horário acabou de ser agendado por outra pessoa.' }, { status: 409 });
     }
@@ -32,6 +46,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// DELETE: Cancela um agendamento e envia e-mails de notificação
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -43,19 +58,26 @@ export async function DELETE(request: Request) {
 
     const appointmentId = parseInt(appointmentIdStr, 10);
 
-    // Verificar se o agendamento existe antes de deletar
-    const appointment = await prisma.appointment.findUnique({
+    // Busca os dados do agendamento ANTES de deletar para poder enviar o e-mail
+    const appointmentDetails = await prisma.appointment.findUnique({
       where: { id: appointmentId },
+      include: {
+        patient: true,
+        clinico: true,
+      },
     });
 
-    if (!appointment) {
+    if (!appointmentDetails) {
       return NextResponse.json({ message: 'Agendamento não encontrado' }, { status: 404 });
     }
 
-    // Deletar o agendamento
+    // Deleta o agendamento
     await prisma.appointment.delete({
       where: { id: appointmentId },
     });
+
+    // Envia os e-mails de cancelamento (sem bloquear a resposta da API)
+    sendAppointmentCancellationEmail(appointmentDetails).catch(console.error);
 
     return NextResponse.json({ message: 'Agendamento cancelado com sucesso!' });
 

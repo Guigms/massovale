@@ -17,6 +17,7 @@ model User {
   emailVerified            Boolean  @default(false)
   emailVerificationToken   String?
   emailVerificationExpires DateTime?
+  avatarUrl                String?
 
   // Relacionamentos
   appointmentsAsPaciente Appointment[] @relation("PatientAppointments")
