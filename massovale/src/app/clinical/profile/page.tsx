@@ -90,8 +90,16 @@ export default function ProfilePage() {
   const avatarSrc = preview || user.avatarUrl || '/default-avatar.png';
 
   return (
+    
     <main className="bg-[#d1d1d1] min-h-screen flex items-center justify-center p-4">
+        <button
+    onClick={() => router.push('/clinical/dashboard')}
+    className="absolute top-4 left-4 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-full hover:bg-gray-300 transition-colors duration-300 shadow-md"
+  >
+    ← Voltar
+  </button>
       <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
+        
         <h1 className="text-2xl font-bold text-center text-gray-800 mb-6">Meu Perfil</h1>
         
         <div className="flex flex-col items-center gap-4">

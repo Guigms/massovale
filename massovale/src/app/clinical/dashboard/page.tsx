@@ -217,7 +217,7 @@ export default function ClinicoDashboard() {
           <div className="relative" ref={dropdownRef}>
             <button onClick={() => setIsDropdownOpen(prev => !prev)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               <Image
-                src={user.avatarUrl || "/profile.jpeg"}
+                src={user.avatarUrl || "/default-avatar.png"}
                 alt="avatar"
                 width={48}
                 height={48}

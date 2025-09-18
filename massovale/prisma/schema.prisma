@@ -22,7 +22,7 @@ model User {
   // Relacionamentos
   appointmentsAsPaciente Appointment[] @relation("PatientAppointments")
   appointmentsAsClinico  Appointment[] @relation("ClinicoAppointments")
-  blockedSlots           BlockedSlot[] // Relação correta para horários bloqueados
+  blockedSlots           BlockedSlot[]
 }
 
 model BlockedSlot {
@@ -42,10 +42,20 @@ model Appointment {
   clinico   User     @relation("ClinicoAppointments", fields: [clinicoId], references: [id])
   clinicoId Int
 
+  // --- ATUALIZAÇÕES AQUI ---
+  status    AppointmentStatus @default(AGENDADO)
+  service   String?
+  notes     String?           @db.Text
   @@unique([clinicoId, date])
 }
 
 enum Role {
   PACIENTE
   CLINICO
+}
+
+enum AppointmentStatus {
+  AGENDADO
+  CONCLUIDO
+  CANCELADO
 }
