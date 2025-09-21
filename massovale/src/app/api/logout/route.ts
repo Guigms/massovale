@@ -8,7 +8,7 @@ export async function POST() {
     // Remove o cookie de autenticação
     (await
           // Remove o cookie de autenticação
-          cookies()).set('auth_token', '', {
+          cookies()).set('token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV !== 'development',
       expires: new Date(0), // Define a data de expiração para o passado

@@ -1,14 +1,30 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { format, addDays, startOfWeek, addWeeks, subWeeks, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { useRouter } from 'next/navigation';
 import useSWR, { mutate } from 'swr';
+import Link from 'next/link';
+import { toast } from 'sonner';
+
 
 // --- TIPOS ---
-type Clinico = { id: number; name: string; };
+type UserProfile = {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+};
+
+// ✅ TIPO ATUALIZADO
+type Clinico = { 
+  id: number; 
+  name: string; 
+  avatarUrl?: string | null; // Adicionado avatarUrl
+};
+
 type AvailabilitySlot = { date: string; status: 'free' | 'booked' | 'blocked'; };
 type MyAppointment = {
   id: number;
@@ -28,34 +44,29 @@ export default function PacienteDashboard() {
   const router = useRouter();
   
   // --- Estados do Componente ---
-  const [userName, setUserName] = useState('');
-  const [patientId, setPatientId] = useState<number | null>(null);
   const [selectedClinico, setSelectedClinico] = useState<Clinico | null>(null);
   const [currentWeek, setCurrentWeek] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
 
   // --- Gerenciamento de dados com SWR ---
+  const { data: userData, error: userError } = useSWR<{user: UserProfile}>('/api/userJWT', fetcher);
   const { data: clinicos, error: clinicosError } = useSWR<Clinico[]>('/api/clinicos', fetcher);
   const { data: myAppointments, error: appointmentsError } = useSWR<MyAppointment[]>('/api/patient/myAppointment', fetcher);
   
   const availabilityUrl = selectedClinico ? `/api/availability?clinicoId=${selectedClinico.id}&startDate=${format(currentWeek, 'yyyy-MM-dd')}` : null;
   const { data: availability, isLoading: isLoadingAvailability } = useSWR<AvailabilitySlot[]>(availabilityUrl, fetcher);
 
-  // --- Efeito para buscar os dados do usuário ---
+  const user = userData?.user;
+
+  // Efeito para lidar com erro de autenticação
   useEffect(() => {
-    async function fetchUser() {
-      try {
-        const userRes = await fetch('/api/userJWT');
-        if (!userRes.ok) { router.push('/login'); return; }
-        const { user } = await userRes.json();
-        setUserName(user.name);
-        setPatientId(user.id);
-      } catch {
-        router.push('/login');
-      }
+    if (userError) {
+      router.push('/login');
     }
-    fetchUser();
-  }, [router]);
-  
+  }, [userError, router]);
+
   const handleLogout = async () => {
     try {
       await fetch('/api/logout', { method: 'POST' });
@@ -66,22 +77,36 @@ export default function PacienteDashboard() {
     }
   };
 
+  // Efeito para fechar o dropdown ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownRef]);
+
+
   // --- Funções de Ação ---
   const handleAgendar = async (slot: AvailabilitySlot) => {
-    if (!patientId || !selectedClinico) return;
+    if (!user || !selectedClinico) return;
     if (!confirm(`Confirmar agendamento com ${selectedClinico.name} em ${format(new Date(slot.date), 'dd/MM/yyyy \'às\' HH:mm')}?`)) return;
 
     try {
       await fetch('/api/appointment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: slot.date, patientId, clinicoId: selectedClinico.id }),
+        body: JSON.stringify({ date: slot.date, patientId: user.id, clinicoId: selectedClinico.id }),
       });
-      alert('Agendado com sucesso!');
+      toast.success('Agendado com sucesso!');
       mutate('/api/patient/myAppointment');
       mutate(availabilityUrl);
     } catch (error) {
-      if(error instanceof Error) alert(error.message);
+      if(error instanceof Error) toast.error(error.message);
     }
   };
 
@@ -89,10 +114,11 @@ export default function PacienteDashboard() {
     if (!confirm('Tem certeza que deseja cancelar este agendamento?')) return;
     try {
       await fetch(`/api/appointment?appointmentId=${appointmentId}`, { method: 'DELETE' });
-      alert('Agendamento cancelado com sucesso!');
+      toast.success('Agendamento cancelado com sucesso!');
       mutate('/api/patient/myAppointment');
+      mutate(availabilityUrl);
     } catch (error) {
-      if(error instanceof Error) alert(error.message);
+      if(error instanceof Error) toast.error(error.message);
     }
   };
 
@@ -106,15 +132,29 @@ export default function PacienteDashboard() {
       <main className="bg-[#d1d1d1] min-h-screen flex flex-col items-center justify-center p-6 font-sans">
         <div className="text-center">
             <Image src="/logover2.png" alt="Logo da Clínica" width={140} height={60} priority className="mx-auto" />
-            <h1 className="text-2xl font-bold text-zinc-800 mt-4">Bem-vindo(a), {userName}!</h1>
+            <h1 className="text-2xl font-bold text-zinc-800 mt-4">Bem-vindo(a), {user?.name}!</h1>
             <p className="text-zinc-600 mb-8">Selecione um profissional para ver a agenda.</p>
         </div>
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-lg w-full max-w-sm space-y-3">
           {!clinicos && !clinicosError && <p className="text-center text-zinc-500">Carregando profissionais...</p>}
           {clinicos?.map(clinico => (
-            <button key={clinico.id} onClick={() => setSelectedClinico(clinico)} className="w-full text-left p-4 rounded-lg bg-gray-100 hover:bg-blue-100 transition-colors">
-              <p className="font-bold text-zinc-800">{clinico.name}</p>
-              <p className="text-sm text-zinc-500">Fisioterapeuta</p>
+            // ✅ BOTÃO DE SELEÇÃO ATUALIZADO COM FOTO
+            <button 
+                key={clinico.id} 
+                onClick={() => setSelectedClinico(clinico)} 
+                className="w-full text-left p-4 rounded-lg bg-gray-100 hover:bg-blue-100 transition-colors flex items-center gap-4"
+            >
+              <Image 
+                src={clinico.avatarUrl || '/default-avatar.png'} 
+                alt={`Foto de ${clinico.name}`}
+                width={48}
+                height={48}
+                className="w-12 h-12 rounded-full object-cover"
+              />
+              <div>
+                <p className="font-bold text-zinc-800">{clinico.name}</p>
+                <p className="text-sm text-zinc-500">Massoterapeuta</p>
+              </div>
             </button>
           ))}
         </div>
@@ -129,8 +169,31 @@ export default function PacienteDashboard() {
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-8">
         <Image src="/logover2.png" alt="Logo da Clínica" width={110} height={50} priority />
         <div className="flex items-center gap-4 self-end md:self-center">
-          <span className="text-base md:text-lg font-medium text-zinc-700 text-right md:text-left">Bem-vindo(a),<br className="md:hidden"/> {userName}!</span>
-          <button onClick={handleLogout} className="text-sm font-semibold text-red-600 hover:text-red-800">Sair</button>
+          <span className="text-base md:text-lg font-medium text-zinc-700 text-right md:text-left">Bem-vindo(a),<br className="md:hidden"/> {user?.name}!</span>
+           <div className="relative" ref={dropdownRef}>
+            <button onClick={() => setIsDropdownOpen(prev => !prev)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <Image
+                src={user?.avatarUrl || "/default-avatar.png"}
+                alt="avatar"
+                width={48}
+                height={48}
+                className="w-10 h-10 md:w-12 md:h-12 rounded-full shadow object-cover"
+              />
+            </button>
+            {isDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                <Link href="/costumer/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                  Meu Perfil
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                >
+                  Sair
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-// Não precisamos mais do endOfWeek, vamos removê-lo
+import { AppointmentStatus } from '@prisma/client';
 
-// --- TIPOS (sem alterações) ---
+// --- TIPOS ATUALIZADOS ---
+type SlotStatus = 'booked' | 'blocked' | 'completed';
+
 type SlotDetails = {
-  status: 'booked' | 'blocked';
+  status: SlotStatus;
   appointmentId?: number;
   patient?: { name:string | null };
 };
@@ -23,22 +25,17 @@ export async function GET(request: Request) {
     }
 
     const userId = parseInt(userIdStr, 10);
-    
-    // Para evitar problemas de fuso horário, tratamos a data como UTC desde o início.
     const weekStart = new Date(`${weekStartDateStr}T00:00:00.000Z`);
-
-    // ✅ CORREÇÃO: Cálculo manual e robusto do fim da semana
-    // Pegamos a data de início e adicionamos 6 dias para chegar ao domingo.
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 6);
-    weekEnd.setUTCHours(23, 59, 59, 999); // Garantimos que cobre até o último milissegundo do domingo
+    weekEnd.setUTCHours(23, 59, 59, 999);
 
     const appointments = await prisma.appointment.findMany({
       where: {
         clinicoId: userId,
         date: {
           gte: weekStart,
-          lte: weekEnd, // Usamos lte (menor ou igual) para incluir o domingo
+          lte: weekEnd,
         },
       },
       include: {
@@ -53,17 +50,20 @@ export async function GET(request: Request) {
         clinicoId: userId,
         date: {
           gte: weekStart,
-          lte: weekEnd, // Usamos lte (menor ou igual) para incluir o domingo
+          lte: weekEnd,
         },
       },
     });
 
-    // O restante do código não precisa de alterações
     const schedule: Schedule = {};
 
+    // ✅ LÓGICA ATUALIZADA AQUI
     appointments.forEach(app => {
+      // Mapeia o status do banco de dados para o status do frontend
+      const status: SlotStatus = app.status === AppointmentStatus.CONCLUIDO ? 'completed' : 'booked';
+      
       schedule[app.date.toISOString()] = {
-        status: 'booked',
+        status: status,
         appointmentId: app.id,
         patient: { name: app.patient?.name ?? null },
       };

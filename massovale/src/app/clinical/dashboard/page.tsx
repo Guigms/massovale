@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState, useRef } from 'react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, isToday, compareAsc } from 'date-fns';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, isSameDay, isToday, compareAsc, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -16,12 +16,15 @@ type UserProfile = {
   email: string;
   avatarUrl?: string | null;
 };
-type SlotStatus = 'booked' | 'blocked' | 'available';
+
+type SlotStatus = 'booked' | 'blocked' | 'available' | 'completed';
+
 type SlotDetails = {
   status: SlotStatus;
   appointmentId?: number;
   patient?: { name: string; };
 };
+
 type Schedule = { [isoDate: string]: SlotDetails; };
 type Patient = { id: number; name: string; };
 
@@ -34,9 +37,14 @@ const fetcher = (url: string) => fetch(url).then(res => {
 });
 
 export default function ClinicoDashboard() {
-  const router = useRouter(); 
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<SlotDetails | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
+  const [service, setService] = useState('');
+  const [notes, setNotes] = useState('');
+
   const [currentWeek, setCurrentWeek] = useState<Date>(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [patientQuery, setPatientQuery] = useState('');
   const [patientResults, setPatientResults] = useState<Patient[]>([]);
@@ -60,6 +68,7 @@ export default function ClinicoDashboard() {
 
   const handleLogout = async () => {
     try {
+      // Corrigindo o bug do logout
       await fetch('/api/logout', { method: 'POST' });
       router.push('/login');
     } catch (error) {
@@ -67,7 +76,7 @@ export default function ClinicoDashboard() {
       router.push('/login');
     }
   };
-  
+
   // Efeito para fechar o dropdown ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -124,16 +133,16 @@ export default function ClinicoDashboard() {
       });
       const data = await res.json();
       if (!res.ok) { throw new Error(data.message || 'Erro ao agendar consulta.'); }
-      
+
       toast.success('Agendamento realizado com sucesso!');
       setModalOpen(false);
       setPatientQuery('');
-      mutate(scheduleUrl); 
+      mutate(scheduleUrl);
     } catch (error) {
       if (error instanceof Error) {
         console.error(error);
         toast.error(error.message);
-      } else { 
+      } else {
         toast.error('Ocorreu um erro inesperado.');
       }
     }
@@ -158,10 +167,10 @@ export default function ClinicoDashboard() {
         toast.success(data.message || `Horário ${status === 'blocked' ? 'bloqueado' : 'disponibilizado'} com sucesso!`);
         setModalOpen(false);
         mutate(scheduleUrl);
-      } else { 
+      } else {
         toast.error(data.message || 'Erro ao atualizar horário.');
       }
-    } catch { 
+    } catch {
       toast.error('Erro de conexão ao atualizar horário.');
     }
   };
@@ -175,13 +184,48 @@ export default function ClinicoDashboard() {
       if (res.ok) {
         toast.success('Agendamento cancelado com sucesso.');
         mutate(scheduleUrl);
-      } else { 
+      } else {
         toast.error(data.message || 'Erro ao cancelar agendamento.');
       }
-    } catch { 
+    } catch {
       toast.error('Erro de conexão ao cancelar agendamento.');
     }
   };
+    
+  const handleFinalizarAtendimento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppointment?.appointmentId) return;
+
+    try {
+        const res = await fetch('/api/clinico/complete-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                appointmentId: selectedAppointment.appointmentId,
+                service,
+                notes,
+            }),
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.message || 'Falha ao finalizar atendimento.');
+        }
+
+        toast.success('Atendimento finalizado com sucesso!');
+        setFinalizeModalOpen(false);
+        setService('');
+        setNotes('');
+        mutate(scheduleUrl); // Revalida os dados da agenda
+    } catch (error) {
+        if (error instanceof Error) {
+            toast.error(error.message);
+        } else {
+            toast.error('Ocorreu um erro inesperado.');
+        }
+    }
+  };
+
 
   const startHour = 8;
   const endHour = 18;
@@ -202,8 +246,8 @@ export default function ClinicoDashboard() {
   return (
     <main className="bg-[#d1d1d1] min-h-screen p-4 md:p-6 font-sans">
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-8">
-        
-        <Image 
+
+        <Image
           src="/logover2.png"
           alt="Logo da Clínica"
           width={110}
@@ -213,7 +257,7 @@ export default function ClinicoDashboard() {
 
         <div className="flex items-center gap-4 self-end md:self-center">
           <span className="text-base md:text-lg font-medium text-gray-700 text-right md:text-left">Bem-vinda, Dr(a).<br className="md:hidden" /> {user.name}!</span>
-          
+
           <div className="relative" ref={dropdownRef}>
             <button onClick={() => setIsDropdownOpen(prev => !prev)} className="rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
               <Image
@@ -229,7 +273,7 @@ export default function ClinicoDashboard() {
                 <Link href="/clinical/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                   Meu Perfil
                 </Link>
-                <button 
+                <button
                   onClick={handleLogout}
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
                 >
@@ -259,7 +303,7 @@ export default function ClinicoDashboard() {
                       <th className="border px-3 py-2 text-sm text-gray-500 text-left">Hora</th>
                       {weekDays.map((day) => (
                         <th key={day.toISOString()} className={`border px-3 py-2 text-sm text-center transition-colors ${isToday(day) ? 'bg-blue-100' : ''}`}>
-                          <div className={`font-semibold ${isToday(day) ? 'text-blue-700' : 'text-gray-700'}`}>{format(day, 'EEEE', {locale: ptBR})}</div>
+                          <div className={`font-semibold ${isToday(day) ? 'text-blue-700' : 'text-gray-700'}`}>{format(day, 'EEEE', { locale: ptBR })}</div>
                           <div className={` ${isToday(day) ? 'text-blue-500' : 'text-gray-500'}`}>{format(day, 'dd/MM')}</div>
                         </th>
                       ))}
@@ -273,22 +317,46 @@ export default function ClinicoDashboard() {
                           const slotDate = new Date(day);
                           slotDate.setHours(hour, 0, 0, 0);
                           const slotDetails = schedule ? schedule[slotDate.toISOString()] : undefined;
+
                           let content;
-                          if (slotDetails?.status === 'booked') {
+                          // ✅ LÓGICA DE RENDERIZAÇÃO ATUALIZADA
+                          if (slotDetails?.status === 'completed') {
                             content = (
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                <div className="bg-blue-100 text-blue-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium whitespace-nowrap">
-                                  {slotDetails.patient?.name}
+                                <div className="bg-gray-200 text-gray-600 text-xs md:text-sm rounded-xl px-2 py-1 font-medium flex flex-col items-center">
+                                    <span>{slotDetails.patient?.name}</span>
+                                    <span className="font-bold">(Concluído)</span>
                                 </div>
-                                <button
-                                  onClick={(e) => handleCancelarAgendamento(e, slotDetails.appointmentId!)}
-                                  className="text-xs text-red-600 hover:underline"
-                                >
-                                  Cancelar
-                                </button>
-                              </div>
                             );
-                          } else if (slotDetails?.status === 'blocked') {
+                          } else if (slotDetails?.status === 'booked') {
+                            content = (
+                                <div className="flex flex-col items-center justify-center gap-1 p-1">
+                                    <div className="bg-blue-100 text-blue-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium whitespace-nowrap">
+                                        {slotDetails.patient?.name}
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedAppointment(slotDetails);
+                                                setFinalizeModalOpen(true);
+                                            }}
+                                            className="text-xs text-green-600 hover:underline"
+                                            // Desabilita se o agendamento for futuro
+                                            disabled={!isPast(slotDate) && !isToday(slotDate)} 
+                                        >
+                                            Finalizar
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleCancelarAgendamento(e, slotDetails.appointmentId!)}
+                                            className="text-xs text-red-600 hover:underline"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                          }
+                          else if (slotDetails?.status === 'blocked') {
                             content = (
                               <div className="bg-red-100 text-red-800 text-xs md:text-sm rounded-xl px-2 py-1 font-medium">
                                 Bloqueado
@@ -304,8 +372,12 @@ export default function ClinicoDashboard() {
                           return (
                             <td
                               key={slotDate.toISOString()}
-                              className={`border text-center px-1 md:px-2 py-2 cursor-pointer hover:bg-blue-50 transition-all ${isToday(day) ? 'bg-blue-50' : ''}`}
+                              className={`border text-center px-1 md:px-2 py-2 transition-all ${
+                                slotDetails?.status === 'completed' ? 'bg-gray-100' : 'cursor-pointer hover:bg-blue-50'
+                              } ${isToday(day) && slotDetails?.status !== 'completed' ? 'bg-blue-50' : ''}`}
                               onClick={() => {
+                                // Impede a abertura do modal para agendamentos concluídos
+                                if (slotDetails?.status === 'completed') return;
                                 setSelectedDate(slotDate);
                                 setModalOpen(true);
                                 setPatientQuery('');
@@ -322,13 +394,13 @@ export default function ClinicoDashboard() {
                 </table>
               </div>
             </section>
-            
+
             <section className="bg-white p-4 md:p-6 rounded-2xl shadow h-fit xl:col-span-1">
               <h2 className="text-xl md:text-2xl font-semibold mb-4 text-gray-700">Próximos Pacientes (Hoje)</h2>
               {(() => {
                 const todayAppointments = schedule ? Object.entries(schedule)
                   .filter(([isoDate, details]) =>
-                    details.status === 'booked' && isSameDay(new Date(isoDate), new Date())
+                    (details.status === 'booked') && isSameDay(new Date(isoDate), new Date())
                   )
                   .map(([isoDate, details]) => ({
                     id: details.appointmentId!,
@@ -399,9 +471,8 @@ export default function ClinicoDashboard() {
               <button
                 onClick={handleAgendar}
                 disabled={!selectedPatient}
-                className={`w-full py-2 rounded text-white transition-colors ${
-                  selectedPatient ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'
-                }`}
+                className={`w-full py-2 rounded text-white transition-colors ${selectedPatient ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-300 cursor-not-allowed'
+                  }`}
               >
                 Agendar para {selectedPatient?.name || '...'}
               </button>
@@ -426,6 +497,60 @@ export default function ClinicoDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal para Finalizar Atendimento */}
+      {finalizeModalOpen && selectedAppointment && (
+          <div className="fixed inset-0 bg-black bg-opacity-20 flex justify-center items-center z-50 p-4">
+              <form onSubmit={handleFinalizarAtendimento} className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-lg">
+                  <h2 className="text-black text-xl font-semibold mb-2">Finalizar Atendimento</h2>
+                  <p className="text-gray-600 mb-4">Paciente: {selectedAppointment.patient?.name}</p>
+                  
+                  <div className="space-y-4">
+                      <div>
+                          <label htmlFor="service" className="block text-sm font-medium text-gray-700">Serviço Realizado</label>
+                          <input
+                              type="text"
+                              id="service"
+                              value={service}
+                              onChange={(e) => setService(e.target.value)}
+                              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black"
+                              placeholder="Ex: Massagem Relaxante"
+                          />
+                      </div>
+                      <div>
+                          <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Anotações da Sessão</label>
+                          <textarea
+                              id="notes"
+                              rows={4}
+                              value={notes}
+                              onChange={(e) => setNotes(e.target.value)}
+                              className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-black"
+                              placeholder="Descreva observações importantes sobre o atendimento..."
+                          />
+                      </div>
+                      <div className="flex justify-end gap-3 pt-4">
+                           <button
+                              type="button"
+                              onClick={() => {
+                                setFinalizeModalOpen(false);
+                                setService('');
+                                setNotes('');
+                              }}
+                              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                          >
+                              Cancelar
+                          </button>
+                          <button
+                              type="submit"
+                              className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                          >
+                              Salvar e Finalizar
+                          </button>
+                      </div>
+                  </div>
+              </form>
+          </div>
       )}
     </main>
   );
