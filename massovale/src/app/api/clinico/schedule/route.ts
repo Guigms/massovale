@@ -8,6 +8,7 @@ type SlotStatus = 'booked' | 'blocked' | 'completed';
 type SlotDetails = {
   status: SlotStatus;
   appointmentId?: number;
+  patientId?: number;
   patient?: { name:string | null };
 };
 type Schedule = {
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
       schedule[app.date.toISOString()] = {
         status: status,
         appointmentId: app.id,
+        patientId: app.patientId,
         patient: { name: app.patient?.name ?? null },
       };
     });

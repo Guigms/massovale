@@ -10,6 +10,7 @@ import useSWR, { mutate } from 'swr'; // Importe o mutate global
 type UserProfile = {
   name: string;
   email: string;
+  contact: string;
   avatarUrl?: string | null;
 };
 
@@ -111,8 +112,21 @@ export default function ProfilePage() {
             className="rounded-full object-cover w-32 h-32 border-4 border-gray-200"
             key={avatarSrc} // Adicionar uma key força o React a recriar o componente de imagem
           />
-          <h2 className="text-xl font-semibold text-gray-700">{user.name}</h2>
-          <p className="text-gray-500">{user.email}</p>
+          <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Nome</label>
+            <p className="text-lg text-gray-700">{user.name}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500">Email</label>
+            <p className="text-lg text-gray-700">{user.email}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-500">contact</label>
+            <p className="text-lg text-gray-700">{user.contact}</p>
+          </div>
+        </div>
+
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">

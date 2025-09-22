@@ -113,7 +113,7 @@ export default function CostumerProfile() {
   return (
     <main className="bg-[#d1d1d1] min-h-screen p-4 md:p-6 font-sans flex justify-center items-center">
         <button
-    onClick={() => router.push('/clinical/dashboard')}
+    onClick={() => router.push('/costumer/dashboard')}
     className="absolute top-4 left-4 bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-full hover:bg-gray-300 transition-colors duration-300 shadow-md"
   >
     ← Voltar
