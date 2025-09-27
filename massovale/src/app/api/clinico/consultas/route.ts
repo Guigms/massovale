@@ -31,10 +31,9 @@ export async function GET(request: Request) {
     }
 
     if (startDate && endDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
+      const start = new Date (`${startDate}T00:00:00`);
 
-      const end = new Date(endDate);
+      const end = new Date(`${endDate}T23:59:59`);
       end.setHours(23, 59, 59, 999);
 
       whereClause.date = {
