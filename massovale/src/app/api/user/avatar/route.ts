@@ -1,5 +1,3 @@
-// src/app/api/user/avatar/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
@@ -9,31 +7,24 @@ import path from 'path';
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 export async function POST(req: NextRequest) {
-  console.log('--- [API /api/user/avatar] Rota acessada ---');
-  
   const token = req.cookies.get('token')?.value;
 
   if (!token) {
-    console.error('[AVATAR API] Erro: Token de autenticação ausente.');
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
     const userId = decoded.userId;
-    console.log(`[AVATAR API] Usuário autenticado com ID: ${userId}`);
 
     const data = await req.formData();
     const file: File | null = data.get('file') as unknown as File;
 
     if (!file) {
-      console.error('[AVATAR API] Erro: Nenhum arquivo foi encontrado no FormData.');
       return NextResponse.json({ error: 'Nenhum arquivo enviado.' }, { status: 400 });
     }
-    console.log(`[AVATAR API] Arquivo recebido: ${file.name}, Tipo: ${file.type}`);
 
     if (!file.type.startsWith('image/')) {
-      console.error(`[AVATAR API] Erro: Tipo de arquivo inválido - ${file.type}`);
       return NextResponse.json({ error: 'Tipo de arquivo inválido. Apenas imagens são permitidas.' }, { status: 400 });
     }
 
@@ -48,38 +39,40 @@ export async function POST(req: NextRequest) {
     try {
       await mkdir(uploadDir, { recursive: true });
     } catch (e) {
-      console.error('[AVATAR API] Falha ao criar o diretório de uploads:', e);
-      return NextResponse.json({ error: 'Erro no servidor ao preparar upload.' }, { status: 500 });
+      // Se o erro não for 'EEXIST' (diretório já existe), é um problema real.
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
+        console.error('Falha ao criar o diretório de uploads:', e);
+        return NextResponse.json({ error: 'Erro no servidor ao preparar upload.' }, { status: 500 });
+      }
     }
     
-    console.log(`[AVATAR API] Tentando salvar o arquivo em: ${uploadPath}`);
     await writeFile(uploadPath, buffer);
-    console.log(`[AVATAR API] SUCESSO: Arquivo salvo fisicamente.`);
 
     const publicUrl = `/uploads/${filename}`;
     
+    // Busca o usuário para verificar se já existe um avatar antigo a ser deletado
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (user?.avatarUrl) {
       try {
         const oldPath = path.join(process.cwd(), 'public', user.avatarUrl);
         await unlink(oldPath);
-        console.log(`[AVATAR API] Avatar antigo deletado: ${oldPath}`);
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (error) {
-        console.error('[AVATAR API] Aviso: Não foi possível deletar o avatar antigo (pode já não existir):', error);
+        // Ignora o erro caso o arquivo antigo não exista, o que é um cenário comum.
       }
     }
     
-    console.log(`[AVATAR API] Atualizando banco de dados com a URL: ${publicUrl}`);
+    // Atualiza o usuário com a nova URL do avatar
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { avatarUrl: publicUrl },
     });
-    console.log(`[AVATAR API] SUCESSO: Banco de dados atualizado.`);
 
     return NextResponse.json({ success: true, avatarUrl: updatedUser.avatarUrl });
 
   } catch (error) {
-    console.error('[AVATAR API] ERRO GERAL NO BLOCO TRY/CATCH:', error);
+    // Loga apenas erros inesperados no servidor
+    console.error('Ocorreu um erro inesperado no upload de avatar:', error);
     return NextResponse.json({ error: 'Token inválido ou erro interno.' }, { status: 500 });
   }
 }
