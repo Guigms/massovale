@@ -1,20 +1,9 @@
-// src/lib/email.ts
+// src/lib/email.ts (VERSÃO CORRIGIDA)
 
 import nodemailer from 'nodemailer';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { User, Appointment } from '@prisma/client';
-
-// Configura o "transportador" de e-mail reutilizando as variáveis de ambiente
-const transporter = nodemailer.createTransport({
-  host: 'smtp.titan.email',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER!,
-    pass: process.env.SMTP_PASS!,
-  },
-});
 
 // Tipagem para os detalhes do agendamento
 type AppointmentDetails = Appointment & {
@@ -22,8 +11,18 @@ type AppointmentDetails = Appointment & {
   clinico: User;
 };
 
-// Função para enviar e-mail de CONFIRMAÇÃO de agendamento
+// ✅ FUNÇÃO CORRIGIDA: O transporter agora é criado DENTRO da função.
 export async function sendAppointmentConfirmationEmail(details: AppointmentDetails) {
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.titan.email',
+    port: 465,
+    secure: true,
+    auth: {
+      user: process.env.SMTP_USER!,
+      pass: process.env.SMTP_PASS!,
+    },
+  });
+
   const appointmentDate = new Date(details.date);
   const formattedDate = format(appointmentDate, "eeee, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const formattedTime = format(appointmentDate, 'HH:mm');
@@ -66,8 +65,18 @@ export async function sendAppointmentConfirmationEmail(details: AppointmentDetai
   });
 }
 
-// Função para enviar e-mail de CANCELAMENTO de agendamento
+// ✅ FUNÇÃO CORRIGIDA: O transporter também é criado DENTRO desta função.
 export async function sendAppointmentCancellationEmail(details: AppointmentDetails) {
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.titan.email',
+    port: 465,
+    secure: true,
+    auth: {
+      user: process.env.SMTP_USER!,
+      pass: process.env.SMTP_PASS!,
+    },
+  });
+
   const appointmentDate = new Date(details.date);
   const formattedDate = format(appointmentDate, "dd 'de' MMMM 'de' yyyy 'às' HH:mm", { locale: ptBR });
 
