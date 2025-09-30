@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           Olá, <strong>${name}</strong> 👋<br />
           Para ativar sua conta, clique no botão abaixo:
         </p>
-        <a href="https://massovale.vercel.app/api/verify?token=${token}" style="display: inline-block; margin: 20px 0; background-color: #787f7e; color: white; text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: bold;">
+        <a href="${process.env.BASE_URL}/api/verify?token=${token}" style="display: inline-block; margin: 20px 0; background-color: #787f7e; color: white; text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: bold;">
           Verificar e-mail
         </a>
         <p style="font-size: 14px; color: #999999; margin-top: 30px;">
