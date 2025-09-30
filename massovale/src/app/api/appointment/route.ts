@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { sendAppointmentConfirmationEmail, sendAppointmentCancellationEmail } from '@/lib/email';
 
+export const runtime = "nodejs";
+
 // POST: Cria um novo agendamento e envia e-mails de confirmação
 export async function POST(req: NextRequest) {
   const { date, patientId, clinicoId } = await req.json();
