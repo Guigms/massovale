@@ -59,10 +59,6 @@ export async function POST(request: Request) {
 }
 
 
-// =================================================================
-// FUNÇÃO PARA DESBLOQUEAR UM HORÁRIO (DELETE)
-// =================================================================
-// Rota: DELETE /api/clinico/blocked-slots?date=ISO_STRING&clinicoId=1
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

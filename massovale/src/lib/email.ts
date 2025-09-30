@@ -1,4 +1,4 @@
-// src/lib/email.ts (VERSÃO CORRIGIDA)
+// src/lib/email.ts (CÓDIGO CORRIGIDO)
 
 import nodemailer from 'nodemailer';
 import { format } from 'date-fns';
@@ -11,8 +11,9 @@ type AppointmentDetails = Appointment & {
   clinico: User;
 };
 
-// ✅ FUNÇÃO CORRIGIDA: O transporter agora é criado DENTRO da função.
+// Função para enviar e-mail de CONFIRMAÇÃO de agendamento
 export async function sendAppointmentConfirmationEmail(details: AppointmentDetails) {
+  // ✅ O transporter agora é criado DENTRO da função.
   const transporter = nodemailer.createTransport({
     host: 'smtp.titan.email',
     port: 465,
@@ -65,8 +66,9 @@ export async function sendAppointmentConfirmationEmail(details: AppointmentDetai
   });
 }
 
-// ✅ FUNÇÃO CORRIGIDA: O transporter também é criado DENTRO desta função.
+// Função para enviar e-mail de CANCELAMENTO de agendamento
 export async function sendAppointmentCancellationEmail(details: AppointmentDetails) {
+  // ✅ O transporter também é criado DENTRO desta função.
   const transporter = nodemailer.createTransport({
     host: 'smtp.titan.email',
     port: 465,

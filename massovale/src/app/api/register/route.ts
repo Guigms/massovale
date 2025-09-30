@@ -1,6 +1,6 @@
-// src/app/api/register/route.ts (VERSÃO CORRIGIDA)
+// src/app/api/register/route.ts (CÓDIGO CORRIGIDO)
 
-import { prisma } from '@/lib/prisma'; // ✅ CORRIGIDO
+import { prisma } from '@/lib/prisma'; // ✅ USA A CONEXÃO CORRETA
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // ✅ CORRIGIDO: transporter movido para DENTRO da função
+  // ✅ MOVIDO PARA DENTRO DA FUNÇÃO
   const transporter = nodemailer.createTransport({
     host: 'smtp.titan.email',
     port: 465,
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           Olá, <strong>${name}</strong> 👋<br />
           Para ativar sua conta, clique no botão abaixo:
         </p>
-        <a href="http://localhost:3000/api/verify?token=${token}" style="display: inline-block; margin: 20px 0; background-color: #787f7e; color: white; text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: bold;">
+        <a href="https://massovale.vercel.app/api/verify?token=${token}" style="display: inline-block; margin: 20px 0; background-color: #787f7e; color: white; text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: bold;">
           Verificar e-mail
         </a>
         <p style="font-size: 14px; color: #999999; margin-top: 30px;">
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     </div>
     `
   });
+
 
   return NextResponse.json({ message: 'Cadastro realizado. Verifique seu e-mail.' });
 }
