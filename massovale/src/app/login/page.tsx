@@ -16,7 +16,10 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Captura params apenas no client-side
   useEffect(() => {
+    if (!searchParams) return;
+
     const verified = searchParams.get('verified');
     const error = searchParams.get('error');
 
@@ -55,17 +58,14 @@ export default function SignInPage() {
       setMessage('Login realizado com sucesso!');
       setType('success');
 
-      // Redireciona de acordo com o role
       if (data.user.role === 'PACIENTE') {
         router.push('/costumer/dashboard');
       } else if (data.user.role === 'CLINICO') {
         router.push('/clinical/dashboard');
       } else {
-        router.push('/'); // fallback
+        router.push('/');
       }
-
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
+    } catch {
       setMessage('Erro ao conectar com o servidor.');
       setType('error');
     } finally {
@@ -77,7 +77,6 @@ export default function SignInPage() {
     <main className="flex min-h-screen w-full">
       <div className="flex flex-1 flex-col justify-center bg-[#dcdcdc] p-8 sm:p-12 md:p-16 lg:w-1/2">
         <div className="mx-auto w-full max-w-md">
-
           {message && (
             <div
               className={`mb-6 rounded-md px-4 py-3 text-sm ${
