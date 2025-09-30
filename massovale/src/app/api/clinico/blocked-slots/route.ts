@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
-const prisma = new PrismaClient();
 
-// =================================================================
-// FUNÇÃO PARA BLOQUEAR UM HORÁRIO (POST)
-// =================================================================
-// Rota: POST /api/clinico/blocked-slots
-// Body: { "date": "ISO_STRING", "clinicoId": 1 }
 export async function POST(request: Request) {
   try {
     const body = await request.json();
