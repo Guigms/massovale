@@ -1,4 +1,4 @@
-// /app/api/availability/route.ts -> Apenas a função GET, que é a única que precisa mudar.
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { addDays, startOfDay, endOfDay, format } from 'date-fns';
@@ -26,8 +26,7 @@ export async function GET(req: NextRequest) {
         where: { clinicoId, date: { gte: weekStart, lte: weekEnd } },
       }),
     ]);
-    
-    // ... o resto do código continua exatamente igual ...
+
 
     const bookedTimestamps = new Set(bookedAppointments.map(a => a.date.getTime()));
     const blockedTimestamps = new Set(blockedSlots.map(b => b.date.getTime()));
