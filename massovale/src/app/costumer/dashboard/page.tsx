@@ -91,16 +91,18 @@ export default function PacienteDashboard() {
   }, [dropdownRef]);
 
 
-  // --- Funções de Ação ---
+
   const handleAgendar = async (slot: AvailabilitySlot) => {
     if (!user || !selectedClinico) return;
     if (!confirm(`Confirmar agendamento com ${selectedClinico.name} em ${format(new Date(slot.date), 'dd/MM/yyyy \'às\' HH:mm')}?`)) return;
+
+    const dateInISOString = new Date(slot.date).toISOString();
 
     try {
       await fetch('/api/appointment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: slot.date, patientId: user.id, clinicoId: selectedClinico.id }),
+        body: JSON.stringify({ date: dateInISOString, patientId: user.id, clinicoId: selectedClinico.id }),
       });
       toast.success('Agendado com sucesso!');
       mutate('/api/patient/myAppointment');

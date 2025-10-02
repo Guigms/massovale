@@ -5,8 +5,8 @@ import { sendAppointmentConfirmationEmail, sendAppointmentCancellationEmail } fr
 
 export const runtime = "nodejs";
 
-// POST: Cria um novo agendamento e envia e-mails de confirmação
 export async function POST(req: NextRequest) {
+  process.env.TZ = 'UTC';
   const { date, patientId, clinicoId } = await req.json();
 
   if (!date || !patientId || !clinicoId) {
@@ -31,7 +31,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Envia os e-mails de confirmação (sem bloquear a resposta da API)
     if (appointmentDetails) {
       sendAppointmentConfirmationEmail(appointmentDetails).catch(console.error);
     }
@@ -50,6 +49,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE: Cancela um agendamento e envia e-mails de notificação
 export async function DELETE(request: Request) {
+  process.env.TZ = 'UTC';
   try {
     const { searchParams } = new URL(request.url);
     const appointmentIdStr = searchParams.get('appointmentId');
