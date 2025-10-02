@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState, useRef } from 'react';
-import { format, addDays, startOfWeek, addWeeks, subWeeks, isToday } from 'date-fns';
+import { format, addDays, startOfWeek, addWeeks, subWeeks, isToday, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale/pt-BR';
 import { useRouter } from 'next/navigation';
 import useSWR, { mutate } from 'swr';
@@ -95,6 +95,11 @@ export default function PacienteDashboard() {
   const handleAgendar = async (slot: AvailabilitySlot) => {
     if (!user || !selectedClinico) return;
     if (!confirm(`Confirmar agendamento com ${selectedClinico.name} em ${format(new Date(slot.date), 'dd/MM/yyyy \'às\' HH:mm')}?`)) return;
+
+    if (isPast(new Date(slot.date))) {
+    toast.error('Não é possível agendar em um horário que já passou.');
+    return;
+  }
 
     const dateInISOString = new Date(slot.date).toISOString();
 

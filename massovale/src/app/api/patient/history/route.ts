@@ -18,10 +18,12 @@ export async function GET() {
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
     const patientId = decoded.userId;
 
-    // Busca todos os agendamentos (passados e futuros)
     const appointments = await prisma.appointment.findMany({
       where: {
         patientId: patientId,
+        status: {
+          in: ['AGENDADO', 'CONCLUIDO']
+        }
       },
       include: {
         clinico: {

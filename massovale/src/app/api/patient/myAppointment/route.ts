@@ -1,14 +1,17 @@
-// /src/app/api/patient/my-appointments/route.ts
+// DENTRO DE: src/app/api/patient/myAppointment/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
+import { startOfDay } from 'date-fns';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 export async function GET() {
-  // 1. Pega o token do cookie
+
+  process.env.TZ = 'UTC';
+
   const token = (await cookies()).get('token')?.value;
 
   if (!token) {
@@ -16,20 +19,22 @@ export async function GET() {
   }
 
   try {
-    // 2. Decodifica o token para obter o ID do paciente
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
     const patientId = decoded.userId;
 
-    // 3. Busca no banco todos os agendamentos futuros para esse paciente
+    const startOfToday = startOfDay(new Date());
+
+
     const appointments = await prisma.appointment.findMany({
       where: {
         patientId: patientId,
+
         date: {
-          // Busca apenas agendamentos de hoje em diante
-          gte: new Date(),
+          gte: startOfToday,
         },
+
+        status: 'AGENDADO',
       },
-      // Inclui o nome do clínico para cada agendamento
       include: {
         clinico: {
           select: {
@@ -37,7 +42,6 @@ export async function GET() {
           },
         },
       },
-      // Ordena do mais próximo para o mais distante
       orderBy: {
         date: 'asc',
       },

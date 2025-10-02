@@ -13,6 +13,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'Dados incompletos para o agendamento.' }, { status: 400 });
   }
 
+  const appointmentDate = new Date(date);
+  const now = new Date();
+
+  if (appointmentDate < now) {
+    return NextResponse.json({ message: 'Não é possível realizar agendamentos em datas ou horários passados.' }, { status: 400 });
+  }
+
   try {
     const appointment = await prisma.appointment.create({
       data: {
@@ -22,7 +29,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Após criar, busca os dados completos para enviar no e-mail
     const appointmentDetails = await prisma.appointment.findUnique({
       where: { id: appointment.id },
       include: {
@@ -47,7 +53,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE: Cancela um agendamento e envia e-mails de notificação
 export async function DELETE(request: Request) {
   process.env.TZ = 'UTC';
   try {
@@ -60,7 +65,6 @@ export async function DELETE(request: Request) {
 
     const appointmentId = parseInt(appointmentIdStr, 10);
 
-    // Busca os dados do agendamento ANTES de deletar para poder enviar o e-mail
     const appointmentDetails = await prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: {
@@ -73,12 +77,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ message: 'Agendamento não encontrado' }, { status: 404 });
     }
 
-    // Deleta o agendamento
     await prisma.appointment.delete({
       where: { id: appointmentId },
     });
 
-    // Envia os e-mails de cancelamento (sem bloquear a resposta da API)
     sendAppointmentCancellationEmail(appointmentDetails).catch(console.error);
 
     return NextResponse.json({ message: 'Agendamento cancelado com sucesso!' });
