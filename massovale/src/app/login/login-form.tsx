@@ -22,11 +22,15 @@ export default function LoginForm() {
 
     const verified = searchParams.get('verified');
     const error = searchParams.get('error');
+    const reset = searchParams.get('reset');
 
     if (verified === '1') {
       setMessage('E-mail verificado com sucesso! Faça login.');
       setType('success');
-    } else if (error === 'invalid') {
+    }else if (reset === 'success') { // <-- NOVO: Mensagem de sucesso do reset
+      setMessage('Senha redefinida com sucesso! Faça login com sua nova senha.');
+      setType('success'); 
+    }else if (error === 'invalid') {
       setMessage('Token inválido ou expirado. Solicite um novo.');
       setType('error');
     } else if (error === 'token') {
@@ -135,7 +139,7 @@ export default function LoginForm() {
 
         <div className="flex items-center justify-between">
           <div className="text-sm">
-            <Link href="#" className="font-semibold text-black hover:text-white">
+            <Link href="/forgot-password" className="font-semibold text-black hover:text-white">
               Esqueceu a senha?
             </Link>
           </div>

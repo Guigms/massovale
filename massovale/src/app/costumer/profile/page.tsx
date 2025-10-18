@@ -155,7 +155,7 @@ export default function CostumerProfile() {
             <p className="text-lg text-gray-700">{user.email}</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-500">contact</label>
+            <label className="block text-sm font-medium text-gray-500">contato</label>
             <p className="text-lg text-gray-700">{user.contact}</p>
           </div>
         </div>

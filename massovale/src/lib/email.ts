@@ -110,3 +110,36 @@ export async function sendAppointmentCancellationEmail(details: AppointmentDetai
     `,
   });
 }
+
+export async function sendPasswordResetEmail(user: User, token: string) {
+  // Cria o transporter (use o mesmo código existente que cria o seu transporter)
+  const transporter = nodemailer.createTransport({
+      host: 'smtp.titan.email',
+      port: 465,
+      secure: true,
+      auth: {
+          user: process.env.SMTP_USER!,
+          pass: process.env.SMTP_PASS!,
+      },
+  });
+
+  const resetLink = `${process.env.BASE_URL}/reset-password?token=${token}`;
+
+  await transporter.sendMail({
+    from: `Jessica Vale Massoterapia <${process.env.SMTP_USER}>`,
+    to: user.email,
+    subject: 'Redefinição de Senha',
+    html: `
+      <div style="font-family: Arial, sans-serif; text-align: center; padding: 40px 20px;">
+        <h2>Olá, ${user.name},</h2>
+        <p>Você solicitou a redefinição de senha. Clique no link abaixo para criar uma nova:</p>
+        <a href="${resetLink}" style="display: inline-block; margin: 20px 0; background-color: #787f7e; color: white; text-decoration: none; padding: 14px 28px; border-radius: 24px; font-weight: bold;">
+          Redefinir Senha
+        </a>
+        <p style="font-size: 14px; color: #999999; margin-top: 30px;">
+          Este link é válido por 1 hora. Se você não solicitou isso, ignore este e-mail.
+        </p>
+      </div>
+    `,
+  });
+}
