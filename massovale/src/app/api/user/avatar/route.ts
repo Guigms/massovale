@@ -62,7 +62,6 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Atualiza o usuário com a nova URL do avatar
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { avatarUrl: publicUrl },
@@ -71,7 +70,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, avatarUrl: updatedUser.avatarUrl });
 
   } catch (error) {
-    // Loga apenas erros inesperados no servidor
     console.error('Ocorreu um erro inesperado no upload de avatar:', error);
     return NextResponse.json({ error: 'Token inválido ou erro interno.' }, { status: 500 });
   }

@@ -173,7 +173,6 @@ export default function CostumerProfile() {
             Salvar Alterações
           </button>
           
-          {/* ✅ ESTA É A ÚNICA MUDANÇA REAL */}
           <Link href="/costumer/dashboard" className="w-full text-center py-2 px-4 rounded-md text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
             Voltar ao Dashboard
           </Link>
