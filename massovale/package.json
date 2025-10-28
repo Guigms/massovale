@@ -16,6 +16,7 @@
     "@fullcalendar/timegrid": "^6.1.18",
     "@prisma/client": "^6.16.3",
     "bcryptjs": "^3.0.2",
+    "cloudinary": "^2.8.0",
     "date-fns": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.525.0",

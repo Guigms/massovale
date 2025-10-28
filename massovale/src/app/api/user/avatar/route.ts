@@ -1,10 +1,17 @@
+// src/app/api/user/avatar/route.ts (Versão Cloudinary)
+
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import jwt from 'jsonwebtoken';
-import { writeFile, unlink, mkdir } from 'fs/promises';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary'; // Importa o Cloudinary
 
 const JWT_SECRET = process.env.JWT_SECRET!;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get('token')?.value;
@@ -31,46 +38,32 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const filename = `${Date.now()}-${file.name.replace(/\s/g, '_')}`;
-    const uploadDir = path.join(process.cwd(), 'public/uploads');
-    const uploadPath = path.join(uploadDir, filename);
-
-    // Garante que o diretório de uploads existe
-    try {
-      await mkdir(uploadDir, { recursive: true });
-    } catch (e) {
-      // Se o erro não for 'EEXIST' (diretório já existe), é um problema real.
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
-        console.error('Falha ao criar o diretório de uploads:', e);
-        return NextResponse.json({ error: 'Erro no servidor ao preparar upload.' }, { status: 500 });
-      }
+    const userToUpdate = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userToUpdate) {
+        return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
     }
-    
-    await writeFile(uploadPath, buffer);
 
-    const publicUrl = `/uploads/${filename}`;
-    
-    // Busca o usuário para verificar se já existe um avatar antigo a ser deletado
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (user?.avatarUrl) {
-      try {
-        const oldPath = path.join(process.cwd(), 'public', user.avatarUrl);
-        await unlink(oldPath);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      } catch (error) {
-        // Ignora o erro caso o arquivo antigo não exista, o que é um cenário comum.
-      }
-    }
+    const base64Image = `data:${file.type};base64,${buffer.toString('base64')}`;
+    const publicId = `massovale_avatars/user-${userId}`; 
+
+    const uploadResult = await cloudinary.uploader.upload(base64Image, {
+        public_id: publicId,
+        overwrite: true, 
+        invalidate: true, 
+        folder: 'massovale_avatars',
+    });
+
+    const publicUrl = uploadResult.secure_url; 
     
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { avatarUrl: publicUrl },
+      data: { avatarUrl: publicUrl }, 
     });
 
     return NextResponse.json({ success: true, avatarUrl: updatedUser.avatarUrl });
 
   } catch (error) {
     console.error('Ocorreu um erro inesperado no upload de avatar:', error);
-    return NextResponse.json({ error: 'Token inválido ou erro interno.' }, { status: 500 });
+    return NextResponse.json({ error: 'Falha no upload do avatar (serviço de armazenamento externo).' }, { status: 500 });
   }
 }
