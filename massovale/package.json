@@ -14,7 +14,7 @@
     "@fullcalendar/interaction": "^6.1.18",
     "@fullcalendar/react": "^6.1.18",
     "@fullcalendar/timegrid": "^6.1.18",
-    "@prisma/client": "^6.16.3",
+    "@prisma/client": "^6.19.1",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.8.0",
     "date-fns": "^4.1.0",
@@ -41,7 +41,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
-    "prisma": "^6.11.1",
+    "prisma": "^6.19.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
